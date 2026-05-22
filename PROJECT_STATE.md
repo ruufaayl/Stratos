@@ -65,9 +65,27 @@ Then Claude Code runs the Harvest Protocol on each.
 - Node 22, Python 3.12.
 
 ## Harvest Status
-- _harvest/ repos cloned: NONE YET — see priority list below
-- NOTICE entries: 0
-- PROVENANCE entries: 0
+- `_harvest/` location: `C:\dev\_harvest\` (sibling of `stratos/`)
+- Tier 1 cloned (shallow, Apache-2.0 ✅): optscale, cloud-custodian, opencost, infracost
+- Tier 3 cloned (datasets): google-cluster-data (CC-BY), AzurePublicDataset
+- Tier 2 **declined** (logged in PROVENANCE.md):
+  - turbot/steampipe — AGPL-3.0
+  - tailwarden/komiser — Elastic License 2.0 (forbids hosted SaaS)
+- NOTICE entries: 0 (no extractions yet — clones are pattern-study staging)
+- PROVENANCE entries: license-gate log only (no idea extractions yet)
+
+### Recon hit list — where the next session reads first
+
+**OptScale recommendations engine** (Python, Apache-2.0):
+`_harvest/optscale/bumiworker/bumiworker/modules/recommendations/`
+| File | Maps to |
+|---|---|
+| `rightsizing_instances.py` | `engine/rightsizing.py` (ENGINE §3) |
+| `rightsizing_rds.py` | future RDS variant |
+| `reserved_instances.py` | `engine/commitment.py` validation (ENGINE §5) |
+| `abandoned_instances.py`, `instances_for_shutdown.py` | `engine/idle.py` (ENGINE §2) |
+| `instances_in_stopped_state_for_a_long_time.py` | zombie detection |
+| `obsolete_snapshots.py`, `s3_abandoned_buckets.py` | storage waste (Phase 2+) |
 
 ## Engine Status
 - Skeleton: ✅ FastAPI app, `/health` route, smoke test
@@ -85,78 +103,20 @@ Then Claude Code runs the Harvest Protocol on each.
 ## Blockers
 - None. Waiting on user to populate `_harvest/`.
 
-## What to put in `_harvest/` first (priority order)
+## Still to harvest (lower priority — wire when needed)
 
-These are the highest-value targets. Drop each into `../_harvest/<repo>/`
-as a sibling of `stratos/`. See HARVEST.md for the protocol Claude Code
-then runs on each.
+**Tier 3 cont. — Real public traces, fetched when proof loader is wired:**
 
-**Tier 1 — Day 1 (highest impact, all Apache-2.0)**
+- **Alibaba cluster-trace** — `alibaba/clusterdata` (microservices stress test).
+- **Bitbrains GWA-T-12** — Grid Workloads Archive (multi-metric).
 
-1. **`hystax/optscale`** — full FinOps platform, the biggest unlock.
-   Reference rightsizing edge cases + RI/SP optimizer for validation.
-   ```
-   git clone https://github.com/hystax/optscale ../_harvest/optscale
-   ```
+The actual *data* for Azure / Google traces is **not** in the cloned repos
+— those are docs + SAS URLs. The proof loader downloads the trace itself
+from the URLs in `_harvest/AzurePublicDataset/data/` references.
 
-2. **`cloud-custodian/cloud-custodian`** — CNCF, multi-cloud remediation
-   engine. We'll wrap it (Pattern B) for the action layer.
-   ```
-   git clone https://github.com/cloud-custodian/cloud-custodian \
-     ../_harvest/cloud-custodian
-   ```
-
-3. **`opencost/opencost`** — CNCF Kubernetes cost allocation. The
-   reference for K8s cost attribution when we add it.
-   ```
-   git clone https://github.com/opencost/opencost ../_harvest/opencost
-   ```
-
-4. **`infracost/infracost`** — Terraform pre-spend estimation. Wrap as
-   CLI (Pattern B) for the shift-left feature.
-   ```
-   git clone https://github.com/infracost/infracost ../_harvest/infracost
-   ```
-
-**Tier 2 — Day 2 (verify license first per FOUNDATIONS §1)**
-
-5. **`turbot/steampipe`** — query cloud as SQL. **VERIFY LICENSE FIRST**
-   — the core has been AGPL-flavored. If AGPL, shell out only.
-   ```
-   git clone https://github.com/turbot/steampipe ../_harvest/steampipe
-   ```
-
-6. **`tailwarden/komiser`** — inventory dashboard. **VERIFY LICENSE FIRST**.
-   ```
-   git clone https://github.com/tailwarden/komiser ../_harvest/komiser
-   ```
-
-**Tier 3 — Real public traces (PROOF data, not code repos)**
-
-These are datasets, not source. Each requires attribution that will be
-auto-logged in `NOTICE` when the loader is wired.
-
-7. **Azure Public Dataset** (PRIMARY proof — 2.6M VMs, 5-min CPU).
-   ```
-   git clone https://github.com/Azure/AzurePublicDataset \
-     ../_harvest/AzurePublicDataset
-   ```
-   Then download a sample trace per their README.
-
-8. **Google cluster-data** (CC-BY).
-   ```
-   git clone https://github.com/google/cluster-data \
-     ../_harvest/cluster-data
-   ```
-
-9. **Alibaba cluster-trace** (microservices stress test).
-10. **Bitbrains GWA-T-12** (multi-metric).
-
-**Tier 4 — Math library reference reading (not vendored — just patterns)**
-
-11. `facebook/prophet` — read for seasonality handling patterns.
-12. `statsmodels/statsmodels` — already in our `requirements.txt`; clone
-    optional for source spelunking.
+**Tier 4 — Reference reading only (probably no clone):**
+- `facebook/prophet` — already in `requirements.txt`; read source via GitHub when seasonality needs hardening.
+- `statsmodels/statsmodels` — same.
 
 ## Notes for the next session
 - First milestone is the real-data waste number from `proof/run_proof.py`.
