@@ -56,9 +56,12 @@ def detect_cost_anomalies(
                 "expected": round(forecast, 2),
                 "overspend": round(resid, 2),
                 "sigma": round(sigma, 2),
-                # The dollar headline is the day's overspend (only positive
-                # residuals count — under-spend isn't an opportunity).
-                "monthly_savings": round(max(0.0, resid), 2),
+                # Anomalies are INFORMATIONAL — they describe a past event,
+                # not a fixed monthly cashflow you can capture by acting on them.
+                # The `overspend` field carries the dollar value for display;
+                # `monthly_savings` is zero so anomalies don't inflate the
+                # "monthly waste identified" headline.
+                "monthly_savings": 0.0,
                 "risk": round(min(1.0, k / abs(sigma)), 3) if sigma else 1.0,
             })
 

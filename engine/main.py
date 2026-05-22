@@ -18,8 +18,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import __version__
+from . import __version__, fixtures
 from .anomaly import detect_cost_anomalies
+from .forecast import forecast_spend
 from .idle import find_idle, idle_score
 from .models import ResourceTelemetry
 from .rightsizing import find_rightsizing, recommend_rightsizing
@@ -173,4 +174,59 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
         "opportunity_count": len(opportunities),
         "total_monthly_waste": total_monthly_waste,
         "opportunities": opportunities,
+    }
+
+
+# =============================================================================
+# Routes — proof (public demo, no auth)
+# =============================================================================
+
+
+@app.get("/proof/synthetic", tags=["proof"])
+def proof_synthetic() -> dict[str, Any]:
+    """Run the engine on the bundled synthetic fleet.
+
+    This is the public demo path — no auth, no DB write. Always returns the
+    same numbers (deterministic seeds), which is exactly what we want: a
+    stranger lands on /proof and sees the same headline we screenshotted.
+    """
+    fleet = fixtures.synthetic_fleet()
+
+    opportunities: list[dict[str, Any]] = []
+    idle_ids: set[str] = set()
+    for t in fleet:
+        opp = idle_score(t)
+        if opp["idle_score"] >= 0.7:
+            opportunities.append(opp)
+            idle_ids.add(t.resource_id)
+    for t in fleet:
+        if t.resource_id in idle_ids:
+            continue
+        opp = recommend_rightsizing(t)
+        if opp is not None and opp["monthly_savings"] > 0:
+            opportunities.append(opp)
+
+    # Daily-cost anomaly detection on a planted-spike series.
+    series, planted = fixtures.daily_cost_with_spikes(
+        days=90, spike_days=(30, 60), spike_factor=4.0
+    )
+    anoms = detect_cost_anomalies(series)
+    opportunities.extend(anoms)
+
+    # Quarter forecast on a seasonal series (for the Pulse "forecast" tile).
+    seasonal = fixtures.daily_cost_seasonal(days=120, seed=12)
+    fc = forecast_spend(seasonal, horizon=90)
+
+    opportunities.sort(key=lambda o: o.get("monthly_savings", 0.0), reverse=True)
+    total = round(sum(o.get("monthly_savings", 0.0) for o in opportunities), 2)
+
+    return {
+        "resource_count": len(fleet),
+        "opportunity_count": len(opportunities),
+        "total_monthly_waste": total,
+        "opportunities": opportunities,
+        "daily_cost_series": [round(float(x), 2) for x in series.tolist()],
+        "planted_anomaly_days": sorted(planted),
+        "forecast": fc,
+        "source": "Synthetic deterministic fleet (engine.fixtures.synthetic_fleet)",
     }

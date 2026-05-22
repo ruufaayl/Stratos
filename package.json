@@ -8,8 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter web dev",
-    "build": "pnpm --filter web build",
+    "dev": "node scripts/sync-env.mjs && pnpm --filter web dev",
+    "build": "node scripts/sync-env.mjs && pnpm --filter web build",
     "lint": "pnpm --filter web lint",
     "typecheck": "pnpm --filter web typecheck",
     "engine:dev": "engine/.venv/Scripts/python -m uvicorn engine.main:app --reload --port 8000",

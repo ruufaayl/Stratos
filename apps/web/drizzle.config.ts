@@ -1,8 +1,10 @@
 import { defineConfig } from "drizzle-kit";
-import { loadEnvConfig } from "@next/env";
+import nextEnv from "@next/env";
 
-// .env.local lives at the monorepo root — load it before reading process.env.
-loadEnvConfig(`${process.cwd()}/../..`);
+// apps/web/.env.local is kept in sync with the monorepo root by sync-env.mjs.
+// drizzle-kit doesn't auto-load env files, so we do it explicitly here.
+const { loadEnvConfig } = nextEnv;
+loadEnvConfig(process.cwd());
 
 // Migrations require a direct (non-pooled) connection.
 const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;

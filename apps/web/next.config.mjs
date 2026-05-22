@@ -1,18 +1,13 @@
-import { loadEnvConfig } from "@next/env";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-
-// Monorepo convention: .env.local lives at the repo ROOT (one source of truth).
-// Load it before Next.js reads process.env so it's available at build + runtime.
-const __dirname = dirname(fileURLToPath(import.meta.url));
-loadEnvConfig(resolve(__dirname, "../.."));
+// .env.local is synced from the monorepo root into apps/web/ by
+// `scripts/sync-env.mjs` (runs automatically on `pnpm dev` / `pnpm build`).
+// Edit the root file; this directory's copy is gitignored and overwritten.
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    typedRoutes: true,
-  },
+  // typedRoutes was on but conflicts with Clerk's optional catch-all routes
+  // ([[...sign-in]]). Re-enable when we move auth pages or upgrade Next.
+  experimental: {},
   async rewrites() {
     return [
       {
