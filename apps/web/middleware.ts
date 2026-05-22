@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 // Public routes (no auth required). Everything else is gated.
@@ -10,8 +11,14 @@ const isPublic = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  if (!isPublic(req)) {
-    await auth.protect();
+  if (isPublic(req)) return;
+  const { userId } = await auth();
+  if (!userId) {
+    // Explicit redirect — auth.protect() rewrites to a 404 in keyless mode,
+    // which is technically protected but a terrible UX.
+    const url = new URL("/sign-in", req.url);
+    url.searchParams.set("redirect_url", req.url);
+    return NextResponse.redirect(url);
   }
 });
 

@@ -9,13 +9,16 @@ Run locally:
 
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 import time
-from typing import Any
+from typing import Any, AsyncIterator
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import __version__, fixtures
@@ -190,21 +193,27 @@ def proof_synthetic() -> dict[str, Any]:
     same numbers (deterministic seeds), which is exactly what we want: a
     stranger lands on /proof and sees the same headline we screenshotted.
     """
+    from .catalog import HOURS_PER_MONTH
+
     fleet = fixtures.synthetic_fleet()
 
     opportunities: list[dict[str, Any]] = []
     idle_ids: set[str] = set()
+    # Track per-resource savings for the cost-map waste intensity.
+    savings_by_id: dict[str, float] = {}
     for t in fleet:
         opp = idle_score(t)
         if opp["idle_score"] >= 0.7:
             opportunities.append(opp)
             idle_ids.add(t.resource_id)
+            savings_by_id[t.resource_id] = opp["monthly_savings"]
     for t in fleet:
         if t.resource_id in idle_ids:
             continue
         opp = recommend_rightsizing(t)
         if opp is not None and opp["monthly_savings"] > 0:
             opportunities.append(opp)
+            savings_by_id[t.resource_id] = opp["monthly_savings"]
 
     # Daily-cost anomaly detection on a planted-spike series.
     series, planted = fixtures.daily_cost_with_spikes(
@@ -220,6 +229,20 @@ def proof_synthetic() -> dict[str, Any]:
     opportunities.sort(key=lambda o: o.get("monthly_savings", 0.0), reverse=True)
     total = round(sum(o.get("monthly_savings", 0.0) for o in opportunities), 2)
 
+    # Per-resource cost-map nodes — id + monthly cost + waste intensity in [0,1].
+    cost_map = []
+    for t in fleet:
+        monthly_cost = round(t.hourly_cost * HOURS_PER_MONTH, 2)
+        savings = savings_by_id.get(t.resource_id, 0.0)
+        waste = round(min(1.0, savings / monthly_cost) if monthly_cost else 0.0, 3)
+        cost_map.append({
+            "id": t.resource_id,
+            "resource_type": t.resource_type,
+            "monthly_cost": monthly_cost,
+            "monthly_savings": round(savings, 2),
+            "waste_intensity": waste,
+        })
+
     return {
         "resource_count": len(fleet),
         "opportunity_count": len(opportunities),
@@ -228,5 +251,88 @@ def proof_synthetic() -> dict[str, Any]:
         "daily_cost_series": [round(float(x), 2) for x in series.tolist()],
         "planted_anomaly_days": sorted(planted),
         "forecast": fc,
+        "cost_map": cost_map,
         "source": "Synthetic deterministic fleet (engine.fixtures.synthetic_fleet)",
     }
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+@app.get("/proof/stream", tags=["proof"])
+async def proof_stream() -> StreamingResponse:
+    """Server-Sent Events: walk the synthetic fleet, emit findings live.
+
+    The waste counter on the public demo ticks up as each VM is analyzed.
+    Roughly 200ms per VM to make the animation visible — the actual engine
+    runs in milliseconds, this is theater on top of real math.
+    """
+
+    async def gen() -> AsyncIterator[str]:
+        fleet = fixtures.synthetic_fleet()
+        yield _sse("start", {"total": len(fleet)})
+
+        running_total = 0.0
+        idle_ids: set[str] = set()
+
+        # Pass 1: idle scan
+        for i, t in enumerate(fleet):
+            opp = idle_score(t)
+            if opp["idle_score"] >= 0.7:
+                running_total += opp["monthly_savings"]
+                idle_ids.add(t.resource_id)
+                yield _sse(
+                    "opportunity",
+                    {
+                        "running_total": round(running_total, 2),
+                        "index": i,
+                        "opportunity": opp,
+                    },
+                )
+            else:
+                yield _sse("scanned", {"index": i, "resource_id": t.resource_id})
+            await asyncio.sleep(0.2)
+
+        # Pass 2: rightsize scan
+        for i, t in enumerate(fleet):
+            if t.resource_id in idle_ids:
+                continue
+            opp = recommend_rightsizing(t)
+            if opp is not None and opp["monthly_savings"] > 0:
+                running_total += opp["monthly_savings"]
+                yield _sse(
+                    "opportunity",
+                    {
+                        "running_total": round(running_total, 2),
+                        "index": len(fleet) + i,
+                        "opportunity": opp,
+                    },
+                )
+            await asyncio.sleep(0.15)
+
+        # Pass 3: anomalies on the daily-cost series
+        series, _ = fixtures.daily_cost_with_spikes(
+            days=90, spike_days=(30, 60), spike_factor=4.0
+        )
+        anoms = detect_cost_anomalies(series)
+        for opp in anoms:
+            yield _sse(
+                "opportunity",
+                {
+                    "running_total": round(running_total, 2),
+                    "opportunity": opp,
+                },
+            )
+            await asyncio.sleep(0.1)
+
+        yield _sse("done", {"total_monthly_waste": round(running_total, 2)})
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )

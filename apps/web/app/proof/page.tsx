@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CostMap } from "@/components/dashboard/cost-map";
 import { OpportunityFeed } from "@/components/dashboard/opportunity-feed";
 import { PulseStrip } from "@/components/dashboard/pulse-strip";
 import { ForecastCone } from "@/components/dashboard/forecast-cone";
@@ -116,8 +117,27 @@ export default async function ProofPage() {
             <OpportunityFeed opportunities={data.opportunities} />
           </section>
 
-          {/* Zone D — Forecast cone */}
+          {/* Right column: Cost Map + Forecast */}
           <section className="space-y-4">
+            {/* Zone C — Cost Map */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Cost map</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CostMap nodes={data.cost_map} />
+                <div className="mt-3 flex items-center justify-between text-xs font-mono text-fg-subtle">
+                  <span>area = monthly cost</span>
+                  <span className="flex items-center gap-2">
+                    <span className="size-2 rounded-sm bg-good" /> efficient
+                    <span className="size-2 rounded-sm bg-warn ml-2" /> risky
+                    <span className="size-2 rounded-sm bg-bad ml-2" /> wasteful
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Zone D — Forecast cone */}
             <Card>
               <CardHeader>
                 <CardTitle>Spend forecast (90 days)</CardTitle>

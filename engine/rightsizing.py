@@ -24,6 +24,8 @@ DEFAULT_TARGET_UTIL = 0.65          # don't let resized box exceed 65% of its vc
 DEFAULT_HEADROOM = 1.20             # multiply demand by 1.2x before fitting
 DEFAULT_AMBER_RISK = 0.80           # post-resize util above this = warn the human
 DEFAULT_MIN_SAMPLES = 100           # need enough signal
+DEFAULT_MAX_CPU_VETO = 0.60         # max-CPU above 60% vetoes the downsize
+                                    # (protects burst/spiky workloads)
 
 
 def recommend_rightsizing(
@@ -46,6 +48,13 @@ def recommend_rightsizing(
         return None
 
     cur = CATALOG[t.resource_type]
+
+    # Spike veto: if max CPU is high, rare bursts could overwhelm a smaller
+    # box (e.g. burst-credit exhaustion on t3 family). OptScale handles this
+    # edge case — we encode it directly as a hard veto.
+    max_cpu = float(t.cpu.max()) / 100.0
+    if max_cpu >= DEFAULT_MAX_CPU_VETO:
+        return None
 
     # Convert "% of current vCPU" → absolute vCPU-equivalent demand
     p95_cpu = float(np.percentile(t.cpu, 95)) / 100.0   # in [0, 1]

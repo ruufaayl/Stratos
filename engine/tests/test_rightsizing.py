@@ -96,6 +96,20 @@ def test_memory_floor_prevents_starvation() -> None:
         assert new.mem_gib >= CATALOG["m5.4xlarge"].mem_gib * 0.5
 
 
+def test_spike_veto_prevents_dangerous_downsize() -> None:
+    # Spiky workload: p95 is low but rare bursts hit 95%. Downsizing would
+    # be technically cheaper but operationally dangerous. The veto must trip.
+    cpu = fixtures.cpu_spiky(seed=3)
+    t = fixtures.telemetry(
+        "i-spiky",
+        cpu=cpu,
+        resource_type="m5.xlarge",
+        hourly_cost=0.192,
+    )
+    opp = recommend_rightsizing(t)
+    assert opp is None, f"max-CPU veto should block downsizing spiky workloads, got {opp}"
+
+
 def test_find_rightsizing_ranks_by_savings() -> None:
     fleet = [
         fixtures.telemetry(

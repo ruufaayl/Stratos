@@ -20,6 +20,15 @@ export const proofResponse = z.object({
     projected_quarter_total: z.number(),
     uncertainty_at_horizon: z.number(),
   }),
+  cost_map: z.array(
+    z.object({
+      id: z.string(),
+      resource_type: z.string(),
+      monthly_cost: z.number(),
+      monthly_savings: z.number(),
+      waste_intensity: z.number(),
+    }),
+  ),
   source: z.string(),
 });
 
