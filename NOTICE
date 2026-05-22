@@ -1,0 +1,18 @@
+Stratos
+Copyright (c) 2026 Stratos. All rights reserved.
+
+================================================================================
+THIRD-PARTY ATTRIBUTIONS
+================================================================================
+
+This product includes ideas, algorithms, and reference patterns informed by
+the open-source projects listed below. Each entry has been reimplemented
+("Pattern C — Extract") or wrapped externally ("Pattern B — Wrap") in
+accordance with its license. Direct code copying is documented per entry.
+
+The Harvest Protocol (HARVEST.md) auto-appends to this file. Do not edit
+entries by hand — add via the protocol so PROVENANCE.md stays in sync.
+
+--------------------------------------------------------------------------------
+(no entries yet — Phase 0 scaffold, harvest not started)
+--------------------------------------------------------------------------------

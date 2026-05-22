@@ -1,0 +1,51 @@
+# dependencies
+node_modules/
+.pnpm-store/
+.venv/
+__pycache__/
+*.egg-info/
+*.pyc
+
+# build output
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# env (NEVER commit secrets)
+.env
+.env.*
+!.env.example
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# test / coverage
+coverage/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Next.js
+.next/
+next-env.d.ts
+
+# data + harvest staging (sibling, but ignore if symlinked in)
+_harvest/
+data/
+*.parquet
+*.csv.gz
+
+# misc
+.turbo/
+.cache/

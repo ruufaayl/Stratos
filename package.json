@@ -1,0 +1,22 @@
+{
+  "name": "stratos",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Stratos — the intelligent layer above your cloud. AI-native cloud cost intelligence.",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "lint": "pnpm --filter web lint",
+    "typecheck": "pnpm --filter web typecheck",
+    "engine:dev": "engine/.venv/Scripts/python -m uvicorn engine.main:app --reload --port 8000",
+    "engine:test": "engine/.venv/Scripts/python -m pytest engine/tests",
+    "engine:install": "py -m venv engine/.venv && engine/.venv/Scripts/python -m pip install --upgrade pip && engine/.venv/Scripts/python -m pip install -r engine/requirements.txt",
+    "db:generate": "pnpm --filter web db:generate",
+    "db:push": "pnpm --filter web db:push",
+    "db:studio": "pnpm --filter web db:studio"
+  }
+}
