@@ -294,10 +294,31 @@ async def proof_stream() -> StreamingResponse:
         yield _sse("start", {"total": len(fleet)})
 
         running_total = 0.0
+        zombie_ids: set[str] = set()
         idle_ids: set[str] = set()
+
+        # Pass 0: zombie scan (stopped/near-stopped — highest confidence, lowest risk)
+        for i, t in enumerate(fleet):
+            opp = zombie_score(t)
+            if opp is not None:
+                running_total += opp["monthly_savings"]
+                zombie_ids.add(t.resource_id)
+                yield _sse(
+                    "opportunity",
+                    {
+                        "running_total": round(running_total, 2),
+                        "index": i,
+                        "opportunity": opp,
+                    },
+                )
+            else:
+                yield _sse("scanned", {"index": i, "resource_id": t.resource_id})
+            await asyncio.sleep(0.15)
 
         # Pass 1: idle scan
         for i, t in enumerate(fleet):
+            if t.resource_id in zombie_ids:
+                continue
             opp = idle_score(t)
             if opp["idle_score"] >= 0.7:
                 running_total += opp["monthly_savings"]
@@ -316,7 +337,7 @@ async def proof_stream() -> StreamingResponse:
 
         # Pass 2: rightsize scan
         for i, t in enumerate(fleet):
-            if t.resource_id in idle_ids:
+            if t.resource_id in zombie_ids or t.resource_id in idle_ids:
                 continue
             opp = recommend_rightsizing(t)
             if opp is not None and opp["monthly_savings"] > 0:
