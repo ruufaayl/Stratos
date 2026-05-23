@@ -51,11 +51,23 @@ export const commitmentOpportunity = baseOpportunity.extend({
   samples: z.number(),
 });
 
+export const zombieOpportunity = baseOpportunity.extend({
+  kind: z.literal("zombie"),
+  resource_id: z.string(),
+  resource_type: z.string(),
+  monthly_cost: z.number(),
+  zombie_label: z.enum(["stopped", "near-stopped"]),
+  max_cpu_pct: z.number(),
+  data_days: z.number(),
+  confidence: z.number(),
+});
+
 export const opportunity = z.discriminatedUnion("kind", [
   idleOpportunity,
   rightsizeOpportunity,
   anomalyOpportunity,
   commitmentOpportunity,
+  zombieOpportunity,
 ]);
 
 export const analyzeResponse = z.object({

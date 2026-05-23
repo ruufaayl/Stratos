@@ -20,6 +20,8 @@ function confidenceDots(risk: number | undefined): string {
 
 function headline(opp: Opportunity): string {
   switch (opp.kind) {
+    case "zombie":
+      return `Terminate ${opp.resource_id} — ${opp.zombie_label === "stopped" ? "fully stopped" : "near-zero activity"}, still billing`;
     case "idle":
       return `Stop ${opp.resource_id} — peak CPU ${opp.peak_cpu_pct.toFixed(1)}%`;
     case "rightsize":
@@ -33,6 +35,8 @@ function headline(opp: Opportunity): string {
 
 function evidence(opp: Opportunity): string {
   switch (opp.kind) {
+    case "zombie":
+      return `Max CPU ${opp.max_cpu_pct.toFixed(2)}% over ${opp.data_days.toFixed(0)} days. No workload — ${(opp.confidence * 100).toFixed(0)}% confident. Safe to terminate.`;
     case "idle":
       return `Idle score ${opp.idle_score.toFixed(2)}. Both CPU and network are quiet.`;
     case "rightsize":

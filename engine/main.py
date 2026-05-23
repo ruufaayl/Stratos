@@ -27,6 +27,7 @@ from .forecast import forecast_spend
 from .idle import find_idle, idle_score
 from .models import ResourceTelemetry
 from .rightsizing import find_rightsizing, recommend_rightsizing
+from .zombie import zombie_score, find_zombies
 
 STARTED_AT = time.time()
 
@@ -145,18 +146,26 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
 
     opportunities: list[dict[str, Any]] = []
 
-    # We score every resource for both idle and rightsize. A resource that's
-    # 0.95 idle gets the idle recommendation; the rightsizer's response on the
-    # same input is suppressed (downsizing an already-idle box is the wrong call).
+    # Priority order: zombie → idle → rightsize. A stopped machine needs
+    # termination advice, not a downsize recommendation.
+    zombie_ids: set[str] = set()
+    for t in fleet:
+        opp = zombie_score(t)
+        if opp is not None:
+            opportunities.append(opp)
+            zombie_ids.add(t.resource_id)
+
     idle_ids: set[str] = set()
     for t in fleet:
+        if t.resource_id in zombie_ids:
+            continue
         opp = idle_score(t)
         if opp["idle_score"] >= 0.7:
             opportunities.append(opp)
             idle_ids.add(t.resource_id)
 
     for t in fleet:
-        if t.resource_id in idle_ids:
+        if t.resource_id in zombie_ids or t.resource_id in idle_ids:
             continue
         opp = recommend_rightsizing(t)
         if opp is not None and opp["monthly_savings"] > 0:
@@ -198,17 +207,28 @@ def proof_synthetic() -> dict[str, Any]:
     fleet = fixtures.synthetic_fleet()
 
     opportunities: list[dict[str, Any]] = []
+    zombie_ids: set[str] = set()
     idle_ids: set[str] = set()
     # Track per-resource savings for the cost-map waste intensity.
     savings_by_id: dict[str, float] = {}
+
     for t in fleet:
+        opp = zombie_score(t)
+        if opp is not None:
+            opportunities.append(opp)
+            zombie_ids.add(t.resource_id)
+            savings_by_id[t.resource_id] = opp["monthly_savings"]
+
+    for t in fleet:
+        if t.resource_id in zombie_ids:
+            continue
         opp = idle_score(t)
         if opp["idle_score"] >= 0.7:
             opportunities.append(opp)
             idle_ids.add(t.resource_id)
             savings_by_id[t.resource_id] = opp["monthly_savings"]
     for t in fleet:
-        if t.resource_id in idle_ids:
+        if t.resource_id in zombie_ids or t.resource_id in idle_ids:
             continue
         opp = recommend_rightsizing(t)
         if opp is not None and opp["monthly_savings"] > 0:

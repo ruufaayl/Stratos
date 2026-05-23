@@ -167,16 +167,36 @@ def telemetry(
     )
 
 
+def cpu_stopped(days: int = DAYS_DEFAULT) -> np.ndarray:
+    """Literally zero CPU — the instance is stopped."""
+    return np.zeros(days * SAMPLES_PER_DAY, dtype=float)
+
+
 def synthetic_fleet(seed: int = 100) -> list[ResourceTelemetry]:
     """A small heterogeneous fleet used by the proof harness and tests.
 
-    Composition is known so the proof headline number is predictable:
-    - 3 idle m5.xlarge (should each be flagged with ~$140/mo savings)
-    - 2 overprovisioned m5.2xlarge (should each be rightsized down)
-    - 2 spiky m5.xlarge (should NOT be flagged as idle)
-    - 2 well-sized m5.large (should NOT be flagged at all)
+    Composition (11 VMs):
+    - 1 stopped/zombie m5.4xlarge  (zero CPU, $562/mo waste — top of list)
+    - 3 idle m5.xlarge             (should each be flagged, ~$140/mo savings)
+    - 2 overprovisioned m5.2xlarge (should be rightsized down)
+    - 2 spiky m5.xlarge            (should NOT be flagged)
+    - 2 well-sized m5.large        (should NOT be flagged)
+
+    The zombie sits at the top because it has zero operational risk and the
+    highest dollar waste — exactly the right ranking logic.
     """
     fleet: list[ResourceTelemetry] = []
+
+    # Zombie: a large stopped instance still incurring volume costs.
+    fleet.append(
+        telemetry(
+            "i-zombie-000",
+            cpu=cpu_stopped(days=DAYS_DEFAULT),
+            resource_type="m5.4xlarge",
+            hourly_cost=0.768,  # $560/mo in attached volumes even when stopped
+        )
+    )
+
     for i in range(3):
         fleet.append(
             telemetry(

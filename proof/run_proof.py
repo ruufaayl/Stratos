@@ -30,23 +30,39 @@ from engine import fixtures
 from engine.anomaly import detect_cost_anomalies
 from engine.idle import idle_score
 from engine.rightsizing import recommend_rightsizing
+from engine.zombie import zombie_score
 
 
 def analyze_fleet(fleet):
-    """Walk a list of ResourceTelemetry and surface every opportunity."""
+    """Walk a list of ResourceTelemetry and surface every opportunity.
+
+    Priority: zombie -> idle -> rightsize (same as engine/main.py).
+    """
     opportunities = []
+    zombie_ids = set()
     idle_ids = set()
+
     for t in fleet:
+        opp = zombie_score(t)
+        if opp is not None:
+            opportunities.append(opp)
+            zombie_ids.add(t.resource_id)
+
+    for t in fleet:
+        if t.resource_id in zombie_ids:
+            continue
         opp = idle_score(t)
         if opp["idle_score"] >= 0.7:
             opportunities.append(opp)
             idle_ids.add(t.resource_id)
+
     for t in fleet:
-        if t.resource_id in idle_ids:
+        if t.resource_id in zombie_ids or t.resource_id in idle_ids:
             continue
         opp = recommend_rightsizing(t)
         if opp is not None and opp["monthly_savings"] > 0:
             opportunities.append(opp)
+
     opportunities.sort(key=lambda o: o.get("monthly_savings", 0.0), reverse=True)
     return opportunities
 
@@ -66,7 +82,9 @@ def headline(name: str, n_resources: int, opportunities, elapsed_s: float) -> No
         rid = opp.get("resource_id", "?")[:24].ljust(24)
         amt = opp.get("monthly_savings", 0.0)
         detail = ""
-        if opp["kind"] == "rightsize":
+        if opp["kind"] == "zombie":
+            detail = f"  {opp['zombie_label']}  max CPU {opp['max_cpu_pct']:.1f}%  conf {opp['confidence']:.0%}"
+        elif opp["kind"] == "rightsize":
             detail = f"  {opp['from_type']} -> {opp['to_type']}  (p95 {opp['p95_cpu_pct']:.0f}%)"
         elif opp["kind"] == "idle":
             detail = f"  peak CPU {opp['peak_cpu_pct']:.1f}%  score {opp['idle_score']:.2f}"
@@ -81,7 +99,7 @@ def run_synthetic() -> int:
     t0 = time.perf_counter()
     opps = analyze_fleet(fleet)
     elapsed = time.perf_counter() - t0
-    headline("engine.fixtures.synthetic_fleet (10 VMs)", len(fleet), opps, elapsed)
+    headline(f"engine.fixtures.synthetic_fleet ({len(fleet)} VMs)", len(fleet), opps, elapsed)
 
     # Also exercise the anomaly detector on synthetic daily spend.
     series, planted = fixtures.daily_cost_with_spikes(spike_days=(30, 60), spike_factor=4.0)
