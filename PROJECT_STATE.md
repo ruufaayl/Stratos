@@ -2,7 +2,7 @@
 > Claude Code updates this at the end of EVERY work session so the next
 > session picks up instantly. This is the working memory of the build.
 
-Last Updated: Day 2 — Phase 4 core built (2026-05-23)
+Last Updated: Day 2 — Phase 4 complete + zombie algorithm (2026-05-23)
 
 ## Current Phase
 PHASE 4 — Polish + Public Launch — **CORE COMPLETE**; pending live keys + Vercel deploy.
@@ -23,7 +23,7 @@ Live, verified routes:
 - Engine `/proof/synthetic` 200  full ranked output with cost-map nodes
 - Engine `/proof/stream`     200  SSE stream, running_total ticks live
 
-Engine tests: **34/34 passing**.
+Engine tests: **45/45 passing** (34 original + 11 zombie).
 
 ## What's done
 
@@ -149,14 +149,24 @@ engine/.venv/Scripts/python -m proof.run_proof --synthetic
 
 ## Commit log
 ```
+edf9c17 chore: log zombie.py OptScale provenance in PROVENANCE.md
+5c7974d feat: wire zombie into SSE stream + proof headline update
+cc7388b feat: engine/zombie.py -- stopped-instance detection (Algorithm 5)
+f9b6717 feat: AWS CloudFormation template for one-click IAM role creation
+7615fb7 chore: update PROJECT_STATE -- Phase 4 core complete
 e52d124 feat: Phase 4 -- Stripe Pro, Resend digest, AWS IAM onboarding, live SSE ticker
-(prior: Phase 0–3 in a single session)
+95cccfb feat: phase 3 finishing -- cost map + SSE stream + dashboard skeleton
+4ab5218 feat(ui): phase 3 public proof page + dashboard zones
+7eda9af feat(engine): phase 1+2 algorithms with passing tests + proof harness
+e4198f9 chore(harvest): log license gates + Tier 1 staging
+2809152 feat: phase 0 scaffold -- monorepo + engine /health
 ```
 
 ## Notes for next session
-- **CloudFormation template**: need to write `stratos-readonly-role.json` with
-  parameters `ExternalId` + `StratosPrincipal` and create the IAM role + policy.
-  Upload to S3 so the wizard's one-click link works.
+- **CloudFormation template** is written at `infra/aws/stratos-readonly-role.json`.
+  Next step: create `stratos-cfn` S3 bucket and upload it (instructions in
+  `infra/aws/README.md`). Then set `STRATOS_AWS_PRINCIPAL` env var to the
+  Stratos IAM principal ARN.
 - **Vercel deploy**: `NEXT_PUBLIC_APP_URL` needs to be set so digest emails
   link to the real domain (default: `https://stratoscloud.io`).
 - **`STRATOS_AWS_PRINCIPAL`** env var: set this to the Stratos AWS account's
