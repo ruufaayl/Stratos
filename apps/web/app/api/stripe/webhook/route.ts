@@ -22,13 +22,43 @@ import { eq } from "drizzle-orm";
 // Stripe sends raw bytes; we need the raw body for signature verification.
 export const runtime = "nodejs";
 
-async function updateAccountTier(clerkUserId: string, tier: string) {
-  // An account row may not exist yet if the user upgraded before connecting
-  // their AWS account. Update if present; create on first onboarding.
-  await db
-    .update(schema.accounts)
-    .set({ tier })
+/**
+ * Upsert-style tier update.
+ *
+ * If the user already has any account rows (e.g. they completed onboarding
+ * before paying), flip tier on all of them. Otherwise create a placeholder
+ * "billing" account row so the subscription is persisted somewhere — when
+ * they later run /onboarding the real cloud-account row inherits the tier.
+ */
+async function setUserTier(
+  clerkUserId: string,
+  tier: string,
+  stripeCustomerId?: string,
+) {
+  const existing = await db
+    .select()
+    .from(schema.accounts)
     .where(eq(schema.accounts.clerkUserId, clerkUserId));
+
+  if (existing.length > 0) {
+    await db
+      .update(schema.accounts)
+      .set({
+        tier,
+        ...(stripeCustomerId ? { stripeCustomerId } : {}),
+      })
+      .where(eq(schema.accounts.clerkUserId, clerkUserId));
+  } else {
+    // No account row yet — create a billing placeholder.
+    await db.insert(schema.accounts).values({
+      clerkUserId,
+      name: "billing",
+      provider: "stripe",
+      tier,
+      stripeCustomerId: stripeCustomerId ?? null,
+      config: {},
+    });
+  }
 }
 
 export async function POST(req: Request) {
@@ -66,15 +96,14 @@ export async function POST(req: Request) {
         const clerkUserId = session.metadata?.clerk_user_id;
 
         if (clerkUserId) {
-          // Also stash the Stripe customer ID for billing portal later
-          if (session.customer && typeof session.customer === "string") {
-            await db
-              .update(schema.accounts)
-              .set({ stripeCustomerId: session.customer })
-              .where(eq(schema.accounts.clerkUserId, clerkUserId));
-          }
-          await updateAccountTier(clerkUserId, "pro");
+          const customerId =
+            session.customer && typeof session.customer === "string"
+              ? session.customer
+              : undefined;
+          await setUserTier(clerkUserId, "pro", customerId);
           console.log(`[stripe] upgraded ${clerkUserId} to pro`);
+        } else {
+          console.warn("[stripe] checkout.session.completed missing clerk_user_id metadata");
         }
         break;
       }
@@ -83,7 +112,7 @@ export async function POST(req: Request) {
         const sub = event.data.object as Stripe.Subscription;
         const clerkUserId = sub.metadata?.clerk_user_id;
         if (clerkUserId) {
-          await updateAccountTier(clerkUserId, "free");
+          await setUserTier(clerkUserId, "free");
           console.log(`[stripe] downgraded ${clerkUserId} to free`);
         }
         break;

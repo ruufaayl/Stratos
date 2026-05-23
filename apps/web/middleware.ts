@@ -6,8 +6,11 @@ const isPublic = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
-  "/proof(.*)",       // the public demo page is intentionally open
-  "/engine/health",   // pass-through to engine health probe
+  "/pricing",                // pricing is public (CTA gates work without auth)
+  "/proof(.*)",              // the public demo page is intentionally open
+  "/engine/health",          // pass-through to engine health probe
+  "/api/stripe/webhook",     // Stripe POSTs here with no Clerk session
+  "/api/digest(.*)",         // Vercel Cron + per-user digest hits, auth via CRON_SECRET
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
