@@ -39,6 +39,23 @@ Records of repos we DECLINED to vendor, so the decision is preserved:
   Reason: ELv2 forbids "providing the software to third parties as a hosted or
   managed service" — Stratos is exactly that. Skip entirely.
 
+### engine/zombie.py  ←  hystax/optscale (Apache-2.0)
+- **Pattern:** C — idea extracted and reimplemented from scratch in our types
+- **Idea:** Detect instances that are fully stopped or near-zero CPU but still
+  incurring charges (attached EBS volumes, Elastic IPs, reserved-capacity waste)
+- **Original location:**
+  `bumiworker/bumiworker/modules/recommendations/instances_in_stopped_state_for_a_long_time.py`
+  `bumiworker/bumiworker/modules/recommendations/abandoned_instances.py`
+- **Our location:** `engine/zombie.py`
+- **Decision:**
+  - OptScale checks Cloud-API stopped state; we infer from CPU telemetry
+    (max CPU == 0 → stopped, max CPU < 0.5% → near-stopped).
+  - Confidence tiers (1.0 / 0.85) replace OptScale's "stopped N days" binary.
+  - Monthly savings = full resource cost * confidence (EBS continues billing).
+  - Risk set to 0.0 for stopped (nothing to interrupt), 0.05 for near-stopped.
+  - No code shared — full reimplementation from the algorithm concept.
+- **Verified by:** `engine/tests/test_zombie.py` — 11 tests, all passing.
+
 <!-- HARVEST-LOG-END — auto-appended above this line. Do not delete marker. -->
 
 ---
