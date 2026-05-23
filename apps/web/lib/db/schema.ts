@@ -34,6 +34,10 @@ export const accounts = pgTable(
     provider: text("provider").notNull(),
     // Free-form metadata (AWS account id, region defaults, etc.)
     config: jsonb("config").$type<Record<string, unknown>>().default({}),
+    // "free" | "pro" — written exclusively by the Stripe webhook, never the UI.
+    tier: text("tier").notNull().default("free"),
+    // Stripe customer ID for billing portal lookups
+    stripeCustomerId: text("stripe_customer_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({

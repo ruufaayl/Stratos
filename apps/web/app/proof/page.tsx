@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 
 import { CostMap } from "@/components/dashboard/cost-map";
 import { OpportunityFeed } from "@/components/dashboard/opportunity-feed";
 import { PulseStrip } from "@/components/dashboard/pulse-strip";
 import { ForecastCone } from "@/components/dashboard/forecast-cone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LiveScanTicker } from "@/components/dashboard/live-scan-ticker";
 import { fetchSyntheticProof } from "@/lib/engine/proof";
 import { usd } from "@/lib/utils";
 
@@ -65,20 +67,33 @@ export default async function ProofPage() {
               / proof
             </span>
           </div>
-          <Link
-            href="/sign-up"
-            className="text-data-sm font-mono text-brand hover:text-brand-hover"
-          >
-            connect your account →
-          </Link>
+          <div className="flex items-center gap-4 text-data-sm font-mono">
+            <SignedOut>
+              <Link
+                href="/sign-up"
+                className="text-brand hover:text-brand-hover"
+              >
+                connect your account →
+              </Link>
+            </SignedOut>
+            <SignedIn>
+              <Link href="/dashboard" className="text-fg-muted hover:text-fg">
+                dashboard
+              </Link>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
+          </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* Hero headline */}
         <section className="space-y-3">
-          <div className="text-fg-muted text-data-sm font-mono uppercase tracking-wide">
-            Live demo · {data.source}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="text-fg-muted text-data-sm font-mono uppercase tracking-wide">
+              Live demo · {data.source}
+            </div>
+            <LiveScanTicker />
           </div>
           <h1 className="text-3xl md:text-5xl font-semibold tracking-tight">
             Stratos found{" "}

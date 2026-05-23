@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 
 export default function Home() {
   return (
@@ -14,15 +15,26 @@ export default function Home() {
             <Link href="/proof" className="text-fg-muted hover:text-fg">
               live demo
             </Link>
-            <Link href="/sign-in" className="text-fg-muted hover:text-fg">
-              sign in
+            <Link href="/pricing" className="text-fg-muted hover:text-fg">
+              pricing
             </Link>
-            <Link
-              href="/sign-up"
-              className="bg-brand hover:bg-brand-hover text-fg px-3 py-1.5 rounded-md transition-colors"
-            >
-              connect account
-            </Link>
+            <SignedOut>
+              <Link href="/sign-in" className="text-fg-muted hover:text-fg">
+                sign in
+              </Link>
+              <Link
+                href="/sign-up"
+                className="bg-brand hover:bg-brand-hover text-fg px-3 py-1.5 rounded-md transition-colors"
+              >
+                connect account
+              </Link>
+            </SignedOut>
+            <SignedIn>
+              <Link href="/dashboard" className="text-fg-muted hover:text-fg">
+                dashboard
+              </Link>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
           </nav>
         </div>
       </header>

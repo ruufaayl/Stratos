@@ -24,5 +24,6 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   // Run on everything except static files + Next internals.
-  matcher: ["/((?!_next|.*\\..*).*)", "/(api|trpc)(.*)"],
+  // /__clerk/(.*) is required for Clerk's dev-browser sync & handshake.
+  matcher: ["/((?!_next|.*\\..*).*)", "/(api|trpc)(.*)", "/__clerk/(.*)"],
 };

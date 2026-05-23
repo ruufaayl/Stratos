@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
+import { UserButton } from "@clerk/nextjs";
 import { eq, desc } from "drizzle-orm";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,12 +43,15 @@ export default async function DashboardPage() {
               / dashboard
             </span>
           </div>
-          <Link
-            href="/proof"
-            className="text-data-sm font-mono text-fg-muted hover:text-fg"
-          >
-            public demo →
-          </Link>
+          <div className="flex items-center gap-4 text-data-sm font-mono">
+            <Link
+              href="/proof"
+              className="text-fg-muted hover:text-fg"
+            >
+              public demo →
+            </Link>
+            <UserButton afterSignOutUrl="/" />
+          </div>
         </div>
       </header>
 
@@ -72,24 +76,19 @@ export default async function DashboardPage() {
                 Setup takes under 10 minutes via a cross-account IAM role.
               </p>
               <div className="flex items-center gap-3 pt-2">
-                <button
-                  disabled
-                  className="px-4 py-2 rounded-md bg-brand/40 text-fg font-medium cursor-not-allowed"
-                  title="Account onboarding ships in Phase 4"
+                <Link
+                  href="/onboarding"
+                  className="px-4 py-2 rounded-md bg-brand hover:bg-brand-hover text-fg font-medium transition-colors text-sm"
                 >
-                  Connect AWS account
-                </button>
+                  Connect AWS account →
+                </Link>
                 <Link
                   href="/proof"
                   className="text-data-sm font-mono text-brand hover:text-brand-hover"
                 >
-                  see the engine running on public data →
+                  see the engine on public data →
                 </Link>
               </div>
-              <p className="text-xs font-mono text-fg-subtle pt-2 border-t border-border">
-                Account onboarding flow ships in Phase 4 (week 11). Until then
-                this page is the empty state new users see.
-              </p>
             </CardContent>
           </Card>
         ) : (
