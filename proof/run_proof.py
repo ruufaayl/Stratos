@@ -197,13 +197,20 @@ def run_azure(path: str, max_vms: int | None) -> int:
     return 0
 
 
-def run_azure_vmtable(path: str, max_vms: int | None) -> int:
+def run_azure_vmtable(
+    path: str, max_vms: int | None, emit_summary: str | None = None
+) -> int:
     """V2 mode: per-VM aggregate stats from vmtable.csv (2.6M VMs).
 
     Uses streaming analysis — never materializes the full fleet into memory.
     The full dataset (2.6M VMs * 2016 CPU samples * 8 bytes) would be ~42 GB
     if materialized; streaming keeps it under 1 GB even at full scale.
+
+    If `emit_summary` is a path, writes a compact JSON summary (headline,
+    counts, top-50 opportunities) consumable by the /proof page on the web.
     """
+    import json as _json
+
     from proof.loaders.azure_v2 import iter_vmtable
 
     csv_path = Path(path)
@@ -220,9 +227,6 @@ def run_azure_vmtable(path: str, max_vms: int | None) -> int:
     print()
 
     t0 = time.perf_counter()
-    # V2 max_cpu is a single-sample peak over ~30 days — using it as a hard
-    # veto is too aggressive. Disable the veto; p95-based sizing math remains
-    # in force and provides the safety margin.
     n, opps = analyze_stream(
         iter_vmtable(csv_path, max_vms=max_vms),
         rightsize_kwargs={"max_cpu_veto": 1.01},
@@ -234,6 +238,35 @@ def run_azure_vmtable(path: str, max_vms: int | None) -> int:
         return 1
 
     headline(f"Azure Public Dataset V2 — {csv_path.name}", n, opps, elapsed)
+
+    if emit_summary:
+        total = sum(o.get("monthly_savings", 0.0) for o in opps)
+        # Bucket opportunities by kind for the UI
+        by_kind: dict[str, int] = {}
+        for o in opps:
+            by_kind[o["kind"]] = by_kind.get(o["kind"], 0) + 1
+
+        summary = {
+            "source": f"Azure Public Dataset V2 ({csv_path.name})",
+            "source_url": "https://github.com/Azure/AzurePublicDataset",
+            "license": "CC-BY 4.0",
+            "generated_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            "resource_count": n,
+            "opportunity_count": len(opps),
+            "total_monthly_waste": round(total, 2),
+            "annual_waste": round(total * 12, 2),
+            "analysis_time_seconds": round(elapsed, 2),
+            "throughput_vms_per_sec": round(n / elapsed, 0) if elapsed else 0,
+            "avg_savings_per_vm": round(total / n, 2) if n else 0,
+            "opportunity_count_by_kind": by_kind,
+            "top_opportunities": opps[:50],
+        }
+        out_path = Path(emit_summary)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with out_path.open("w", encoding="utf-8") as f:
+            _json.dump(summary, f, indent=2, default=str)
+        print(f"\n  Summary written -> {out_path}")
+
     return 0
 
 
@@ -248,12 +281,14 @@ def main(argv: list[str] | None = None) -> int:
                      help="run on an Azure V2 vmtable.csv file (per-VM aggregates)")
     p.add_argument("--max-vms", type=int, default=None,
                    help="limit number of VMs analyzed (Azure modes)")
+    p.add_argument("--emit-summary", metavar="JSON_PATH", default=None,
+                   help="(V2 mode) write a compact JSON summary for the web /proof page")
     args = p.parse_args(argv)
 
     if args.synthetic:
         return run_synthetic()
     if args.azure_vmtable:
-        return run_azure_vmtable(args.azure_vmtable, args.max_vms)
+        return run_azure_vmtable(args.azure_vmtable, args.max_vms, args.emit_summary)
     return run_azure(args.azure, args.max_vms)
 
 
