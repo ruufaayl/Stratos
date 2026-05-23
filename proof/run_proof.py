@@ -76,6 +76,62 @@ def analyze_fleet(fleet, *, rightsize_kwargs: dict | None = None):
     return opportunities
 
 
+def analyze_stream(
+    fleet_iter,
+    *,
+    rightsize_kwargs: dict | None = None,
+    progress_every: int = 100_000,
+):
+    """Single-pass streaming analyzer for very large fleets.
+
+    Memory stays bounded — we never materialize the fleet list. Each VM is
+    classified in one pass (zombie OR idle OR rightsize; first match wins),
+    and only the much smaller opportunity dicts are retained.
+
+    For the Azure V2 vmtable (2.6M VMs * 2016-element CPU arrays =
+    ~42 GB if materialized), this is the only viable path.
+
+    Returns: (n_analyzed, opportunities) tuple.
+    """
+    rs_kwargs = rightsize_kwargs or {}
+    opportunities = []
+    n = 0
+    t_start = time.perf_counter()
+
+    for t in fleet_iter:
+        n += 1
+
+        # zombie first (highest confidence, zero risk)
+        opp = zombie_score(t)
+        if opp is not None:
+            opportunities.append(opp)
+        else:
+            # idle next
+            opp = idle_score(t)
+            if opp["idle_score"] >= 0.7:
+                opportunities.append(opp)
+            else:
+                # rightsize last
+                opp = recommend_rightsizing(t, **rs_kwargs)
+                if opp is not None and opp["monthly_savings"] > 0:
+                    opportunities.append(opp)
+
+        if n % progress_every == 0:
+            elapsed = time.perf_counter() - t_start
+            rate = n / elapsed if elapsed > 0 else 0
+            running_total = sum(o.get("monthly_savings", 0.0) for o in opportunities)
+            print(
+                f"    ... {n:>10,} VMs scanned  |  "
+                f"{len(opportunities):>9,} opps  |  "
+                f"${running_total:>14,.0f}/mo running  |  "
+                f"{rate:>6,.0f} VMs/s",
+                flush=True,
+            )
+
+    opportunities.sort(key=lambda o: o.get("monthly_savings", 0.0), reverse=True)
+    return n, opportunities
+
+
 def headline(name: str, n_resources: int, opportunities, elapsed_s: float) -> None:
     total = sum(o.get("monthly_savings", 0.0) for o in opportunities)
     print()
@@ -142,7 +198,12 @@ def run_azure(path: str, max_vms: int | None) -> int:
 
 
 def run_azure_vmtable(path: str, max_vms: int | None) -> int:
-    """V2 mode: per-VM aggregate stats from vmtable.csv (2.6M VMs)."""
+    """V2 mode: per-VM aggregate stats from vmtable.csv (2.6M VMs).
+
+    Uses streaming analysis — never materializes the full fleet into memory.
+    The full dataset (2.6M VMs * 2016 CPU samples * 8 bytes) would be ~42 GB
+    if materialized; streaming keeps it under 1 GB even at full scale.
+    """
     from proof.loaders.azure_v2 import iter_vmtable
 
     csv_path = Path(path)
@@ -155,22 +216,24 @@ def run_azure_vmtable(path: str, max_vms: int | None) -> int:
     print(" Long-lived VMs only — filters out short-lived workloads and Unknown category.)")
     if max_vms:
         print(f"  Capped at {max_vms:,} VMs")
+    print(f"  Streaming analysis (memory bounded — won't materialize fleet)...")
+    print()
 
     t0 = time.perf_counter()
-    fleet = list(iter_vmtable(csv_path, max_vms=max_vms))
-    print(f"  Loaded {len(fleet):,} VMs in {time.perf_counter() - t0:.1f}s")
+    # V2 max_cpu is a single-sample peak over ~30 days — using it as a hard
+    # veto is too aggressive. Disable the veto; p95-based sizing math remains
+    # in force and provides the safety margin.
+    n, opps = analyze_stream(
+        iter_vmtable(csv_path, max_vms=max_vms),
+        rightsize_kwargs={"max_cpu_veto": 1.01},
+    )
+    elapsed = time.perf_counter() - t0
 
-    if not fleet:
+    if n == 0:
         print("ERROR: no VMs loaded — check that filters aren't too strict.", file=sys.stderr)
         return 1
 
-    t1 = time.perf_counter()
-    # V2 max_cpu is a single-sample peak over ~30 days — using it as a hard
-    # veto is too aggressive. Disable the veto here; the p95-based sizing math
-    # remains in force and provides the safety margin.
-    opps = analyze_fleet(fleet, rightsize_kwargs={"max_cpu_veto": 1.01})
-    elapsed = time.perf_counter() - t1
-    headline(f"Azure Public Dataset V2 — {csv_path.name}", len(fleet), opps, elapsed)
+    headline(f"Azure Public Dataset V2 — {csv_path.name}", n, opps, elapsed)
     return 0
 
 

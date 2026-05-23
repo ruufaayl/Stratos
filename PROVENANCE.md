@@ -51,8 +51,10 @@ Records of repos we DECLINED to vendor, so the decision is preserved:
 - **Attribution (CC-BY 4.0 requirement):** "Cloud workload telemetry data
   used in this work is sourced from the Microsoft Azure Public Dataset V2,
   licensed under CC-BY 4.0. See https://github.com/Azure/AzurePublicDataset"
-- **First real-data proof run:** 100,000 VMs → $2,820,453/mo waste identified
-  (avg $26.55/VM/mo over-provisioned compute).
+- **Full-dataset proof run:** 248,458 long-lived production VMs analyzed in
+  111 seconds → **$7,097,364.31/mo waste identified** ($85.2M/year, avg
+  $28.57/VM/mo). Engine math was 100% deterministic — every dollar reproduces
+  on re-run with no AI involvement.
 
 ### engine/zombie.py  ←  hystax/optscale (Apache-2.0)
 - **Pattern:** C — idea extracted and reimplemented from scratch in our types

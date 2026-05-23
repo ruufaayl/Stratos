@@ -1,0 +1,41 @@
+Stratos proof harness — Azure Public Dataset V2 vmtable (vmtable.csv).
+(Real Azure VM aggregate stats, priced at AWS us-east-1 on-demand rates.
+ Long-lived VMs only — filters out short-lived workloads and Unknown category.)
+  Streaming analysis (memory bounded — won't materialize fleet)...
+
+    ...    100,000 VMs scanned  |    89,086 opps  |  $    2,820,454/mo running  |   2,023 VMs/s
+    ...    200,000 VMs scanned  |   182,391 opps  |  $    5,235,994/mo running  |   2,164 VMs/s
+
+  Source: Azure Public Dataset V2 — vmtable.csv
+  Resources analyzed: 248,458
+  Opportunities found: 226,121
+  Analysis time: 111.45s
+
+  >>> MONTHLY WASTE IDENTIFIED: $7,097,364.31 <<<
+
+    RIGHTSIZE  vUq8ew8+i+uyaD2caMFFxJRl $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 1%)
+    RIGHTSIZE  KHPKuVQjhzqAkkAwoDoniwsW $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 3%)
+    RIGHTSIZE  GuRpSjaR2l9UaJcEmosgdzso $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 0%)
+    RIGHTSIZE  +BTvDh6oqFYysYLyySCiXIQF $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 0%)
+    RIGHTSIZE  dgv0QR0PhGpo4wqETdH2bv1x $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 0%)
+    RIGHTSIZE  H1QzBVj98nrbdw4+r08hyRSj $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 0%)
+    RIGHTSIZE  ZnxFuLYulYizJrYBthX1yDsw $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 0%)
+    RIGHTSIZE  2uARPz/Qby4BLiP+FYWSrFAS $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 0%)
+    RIGHTSIZE  PSyiGxvW4Lci56UrVT9PxE2x $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 0%)
+    RIGHTSIZE  3sjQqPukBerZpe0bxJ2EmzkO $      753.36/mo    m5.8xlarge -> r5.2xlarge  (p95 0%)
+
+================================================================================
+Summary
+
+  - 248,458 real production VMs analyzed in 111 seconds (~2,228 VMs/sec)
+  - 226,121 ranked, dollar-quantified opportunities
+  - $7,097,364.31 / month  →  $85,168,372 / year identified waste
+  - Average $28.57/VM/mo over-provisioned compute
+  - Dominant pattern: m5.8xlarge equivalents (32 vCPU / 128 GiB) at 0% p95
+
+Architecture proof:
+  - 100% deterministic — every dollar reproduces on re-run
+  - Python computes; the LLM never touches a number
+  - Source: Azure Public Dataset V2 vmtable.csv (CC-BY 4.0, ~580 MB)
+  - License-clean: no GPL/AGPL code, dataset attribution in PROVENANCE.md
+================================================================================
