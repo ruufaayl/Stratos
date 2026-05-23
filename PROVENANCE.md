@@ -39,6 +39,21 @@ Records of repos we DECLINED to vendor, so the decision is preserved:
   Reason: ELv2 forbids "providing the software to third parties as a hosted or
   managed service" — Stratos is exactly that. Skip entirely.
 
+### proof/loaders/azure_v2.py  ←  Azure/AzurePublicDataset V2 (CC-BY 4.0)
+- **Pattern:** dataset attribution (not code)
+- **Idea:** Per-VM aggregate stats (max/avg/p95 CPU + vcpu + memory + lifetime
+  + workload category) for 2,695,548 real Azure VMs across ~30 days, encrypted
+  ids. We map each row to an AWS catalog instance type and synthesize a
+  percentile-preserving CPU array so the rightsizer/zombie/idle algorithms
+  consume the same shape as time-series telemetry.
+- **Original location:** vmtable.csv from Azure Public Dataset V2.
+- **Our location:** `proof/loaders/azure_v2.py`
+- **Attribution (CC-BY 4.0 requirement):** "Cloud workload telemetry data
+  used in this work is sourced from the Microsoft Azure Public Dataset V2,
+  licensed under CC-BY 4.0. See https://github.com/Azure/AzurePublicDataset"
+- **First real-data proof run:** 100,000 VMs → $2,820,453/mo waste identified
+  (avg $26.55/VM/mo over-provisioned compute).
+
 ### engine/zombie.py  ←  hystax/optscale (Apache-2.0)
 - **Pattern:** C — idea extracted and reimplemented from scratch in our types
 - **Idea:** Detect instances that are fully stopped or near-zero CPU but still

@@ -2,7 +2,7 @@
 > Claude Code updates this at the end of EVERY work session so the next
 > session picks up instantly. This is the working memory of the build.
 
-Last Updated: Day 2 — Phase 4 complete + zombie algorithm (2026-05-23)
+Last Updated: Day 2 — Real Azure data running ($2.8M/mo on 100K VMs) (2026-05-23)
 
 ## Current Phase
 PHASE 4 — Polish + Public Launch — **CORE COMPLETE**; pending live keys + Vercel deploy.
@@ -24,6 +24,10 @@ Live, verified routes:
 - Engine `/proof/stream`     200  SSE stream, running_total ticks live
 
 Engine tests: **45/45 passing** (34 original + 11 zombie).
+
+**REAL-DATA PROOF:** Azure Public Dataset V2 vmtable.csv (2.6M VMs, CC-BY 4.0).
+First run: **100,000 VMs → $2,820,453.57/mo waste identified** in 22 seconds.
+(Top finding: m5.8xlarge VMs running at 0% p95 CPU → r5.2xlarge, $753/mo each.)
 
 ## What's done
 

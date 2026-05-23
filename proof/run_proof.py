@@ -2,15 +2,18 @@
 
 Runs OUR engine against a fleet of resources and prints the dollar headline.
 
-Two modes:
-  --synthetic   Use engine.fixtures.synthetic_fleet (10 VMs, deterministic).
-                Always works — no data download needed. The CI gate.
-  --azure PATH  Use a real Azure Public Dataset V1 vm_cpu_readings CSV.
-                Tells the truth on real data.
+Modes:
+  --synthetic            engine.fixtures.synthetic_fleet (10 VMs, deterministic).
+                         Always works — no data download. The CI gate.
+  --azure PATH           Real Azure Public Dataset V1 vm_cpu_readings CSV.
+                         Per-5-min time series, full waveform.
+  --azure-vmtable PATH   Real Azure Public Dataset V2 vmtable.csv.
+                         Per-VM aggregate stats (max/avg/p95 CPU) for 2.6M VMs.
 
 Run:
     python -m proof.run_proof --synthetic
     python -m proof.run_proof --azure data/azure/vm_cpu_readings-file-1-of-195.csv
+    python -m proof.run_proof --azure-vmtable data/azure/vmtable.csv --max-vms 50000
 """
 
 from __future__ import annotations
@@ -33,11 +36,17 @@ from engine.rightsizing import recommend_rightsizing
 from engine.zombie import zombie_score
 
 
-def analyze_fleet(fleet):
+def analyze_fleet(fleet, *, rightsize_kwargs: dict | None = None):
     """Walk a list of ResourceTelemetry and surface every opportunity.
 
     Priority: zombie -> idle -> rightsize (same as engine/main.py).
+
+    rightsize_kwargs: extra arguments forwarded to recommend_rightsizing().
+    Used by the V2 vmtable loader to pass max_cpu_veto=1.01 (effectively
+    disabled), because V2's `max_cpu` is a single-sample peak across a
+    ~30-day trace — using it as a veto is too aggressive on real data.
     """
+    rs_kwargs = rightsize_kwargs or {}
     opportunities = []
     zombie_ids = set()
     idle_ids = set()
@@ -59,7 +68,7 @@ def analyze_fleet(fleet):
     for t in fleet:
         if t.resource_id in zombie_ids or t.resource_id in idle_ids:
             continue
-        opp = recommend_rightsizing(t)
+        opp = recommend_rightsizing(t, **rs_kwargs)
         if opp is not None and opp["monthly_savings"] > 0:
             opportunities.append(opp)
 
@@ -132,6 +141,39 @@ def run_azure(path: str, max_vms: int | None) -> int:
     return 0
 
 
+def run_azure_vmtable(path: str, max_vms: int | None) -> int:
+    """V2 mode: per-VM aggregate stats from vmtable.csv (2.6M VMs)."""
+    from proof.loaders.azure_v2 import iter_vmtable
+
+    csv_path = Path(path)
+    if not csv_path.exists():
+        print(f"ERROR: file not found: {csv_path}", file=sys.stderr)
+        return 2
+
+    print(f"Stratos proof harness — Azure Public Dataset V2 vmtable ({csv_path.name}).")
+    print("(Real Azure VM aggregate stats, priced at AWS us-east-1 on-demand rates.")
+    print(" Long-lived VMs only — filters out short-lived workloads and Unknown category.)")
+    if max_vms:
+        print(f"  Capped at {max_vms:,} VMs")
+
+    t0 = time.perf_counter()
+    fleet = list(iter_vmtable(csv_path, max_vms=max_vms))
+    print(f"  Loaded {len(fleet):,} VMs in {time.perf_counter() - t0:.1f}s")
+
+    if not fleet:
+        print("ERROR: no VMs loaded — check that filters aren't too strict.", file=sys.stderr)
+        return 1
+
+    t1 = time.perf_counter()
+    # V2 max_cpu is a single-sample peak over ~30 days — using it as a hard
+    # veto is too aggressive. Disable the veto here; the p95-based sizing math
+    # remains in force and provides the safety margin.
+    opps = analyze_fleet(fleet, rightsize_kwargs={"max_cpu_veto": 1.01})
+    elapsed = time.perf_counter() - t1
+    headline(f"Azure Public Dataset V2 — {csv_path.name}", len(fleet), opps, elapsed)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     src = p.add_mutually_exclusive_group(required=True)
@@ -139,12 +181,16 @@ def main(argv: list[str] | None = None) -> int:
                      help="run on the bundled synthetic fleet (no download required)")
     src.add_argument("--azure", metavar="CSV",
                      help="run on an Azure V1 vm_cpu_readings CSV file")
+    src.add_argument("--azure-vmtable", metavar="CSV",
+                     help="run on an Azure V2 vmtable.csv file (per-VM aggregates)")
     p.add_argument("--max-vms", type=int, default=None,
-                   help="limit number of VMs analyzed (Azure mode)")
+                   help="limit number of VMs analyzed (Azure modes)")
     args = p.parse_args(argv)
 
     if args.synthetic:
         return run_synthetic()
+    if args.azure_vmtable:
+        return run_azure_vmtable(args.azure_vmtable, args.max_vms)
     return run_azure(args.azure, args.max_vms)
 
 

@@ -35,12 +35,18 @@ def recommend_rightsizing(
     headroom: float = DEFAULT_HEADROOM,
     same_family_only: bool = False,
     min_samples: int = DEFAULT_MIN_SAMPLES,
+    max_cpu_veto: float = DEFAULT_MAX_CPU_VETO,
 ) -> Opportunity | None:
     """Return a downsize recommendation if one exists, else None.
 
     Memory floor: target type must keep at least half the current memory
     (a hard rule from OptScale's edge cases — surprise-OOMs destroy trust
     faster than over-provisioning costs money).
+
+    max_cpu_veto: tunable spike veto threshold (default 0.60). For datasets
+    that only expose aggregate stats (e.g. Azure V2 vmtable, where `max` is
+    a single sample across 30 days of telemetry), pass a higher value
+    (e.g. 1.01 to disable, or use the dataset's own p99/p95 as the signal).
     """
     if t.resource_type not in CATALOG:
         return None
@@ -51,9 +57,9 @@ def recommend_rightsizing(
 
     # Spike veto: if max CPU is high, rare bursts could overwhelm a smaller
     # box (e.g. burst-credit exhaustion on t3 family). OptScale handles this
-    # edge case — we encode it directly as a hard veto.
+    # edge case — we encode it directly as a tunable veto.
     max_cpu = float(t.cpu.max()) / 100.0
-    if max_cpu >= DEFAULT_MAX_CPU_VETO:
+    if max_cpu >= max_cpu_veto:
         return None
 
     # Convert "% of current vCPU" → absolute vCPU-equivalent demand
