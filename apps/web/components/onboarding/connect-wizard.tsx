@@ -149,7 +149,7 @@ export function ConnectWizard({ externalId, stratosPrincipal }: ConnectWizardPro
               value={accountName}
               onChange={(e) => setAccountName(e.target.value)}
               placeholder="acme-prod"
-              className="w-full px-3 py-2 rounded-md bg-bg-subtle border border-border focus:border-brand focus:outline-none text-fg font-mono text-sm"
+              className="w-full px-3 py-2 rounded-md bg-bg-subtle border border-border focus:border-intel-500 text-fg font-mono text-sm"
             />
           </div>
           <button
@@ -239,7 +239,7 @@ export function ConnectWizard({ externalId, stratosPrincipal }: ConnectWizardPro
               value={roleArn}
               onChange={(e) => setRoleArn(e.target.value)}
               placeholder="arn:aws:iam::123456789012:role/StratosReadOnly"
-              className="w-full px-3 py-2 rounded-md bg-bg-subtle border border-border focus:border-brand focus:outline-none text-fg font-mono text-sm"
+              className="w-full px-3 py-2 rounded-md bg-bg-subtle border border-border focus:border-intel-500 text-fg font-mono text-sm"
             />
           </div>
           <div className="space-y-2">
@@ -247,7 +247,7 @@ export function ConnectWizard({ externalId, stratosPrincipal }: ConnectWizardPro
             <select
               value={region}
               onChange={(e) => setRegion(e.target.value)}
-              className="w-full px-3 py-2 rounded-md bg-bg-subtle border border-border focus:border-brand focus:outline-none text-fg font-mono text-sm"
+              className="w-full px-3 py-2 rounded-md bg-bg-subtle border border-border focus:border-intel-500 text-fg font-mono text-sm"
             >
               {["us-east-1", "us-east-2", "us-west-1", "us-west-2", "eu-west-1", "eu-central-1", "ap-southeast-1", "ap-northeast-1"].map((r) => (
                 <option key={r} value={r}>{r}</option>
