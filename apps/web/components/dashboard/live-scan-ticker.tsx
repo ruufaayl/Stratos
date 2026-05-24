@@ -71,46 +71,46 @@ export function LiveScanTicker() {
   }, []);
 
   return (
-    <div className="flex items-center gap-3 text-data-sm font-mono">
+    <div className="flex items-center gap-3 text-mono-sm font-mono">
       {phase === "connecting" && (
         <>
-          <span className="size-2 rounded-full bg-warn animate-pulse-dot" />
-          <span className="text-fg-subtle">connecting to engine…</span>
+          <span className="size-2 rounded-full bg-risk-500 animate-pulse-dot" />
+          <span className="text-text-faint">connecting to engine…</span>
         </>
       )}
 
       {phase === "scanning" && (
         <>
-          <span className="size-2 rounded-full bg-brand animate-pulse-dot" />
-          <span className="text-fg-subtle">
+          <span className="size-2 rounded-full bg-intel-500 animate-pulse-dot" />
+          <span className="text-text-faint">
             scanning fleet — found{" "}
-            <span className="text-bad tabular">{usd(running)}</span>
+            <span className="text-waste-500 tabular">{usd(running)}</span>
             {found > 0 && (
-              <span className="text-fg-subtle ml-1">
+              <span className="text-text-faint ml-1">
                 ({found} {found === 1 ? "opportunity" : "opportunities"})
               </span>
             )}
           </span>
-          <span className="text-fg-subtle opacity-50">{elapsed}s</span>
+          <span className="text-text-faint opacity-50">{elapsed}s</span>
         </>
       )}
 
       {phase === "done" && (
         <>
-          <span className="size-2 rounded-full bg-good" />
-          <span className="text-fg-subtle">
+          <span className="size-2 rounded-full bg-savings-500" />
+          <span className="text-text-faint">
             scan complete ·{" "}
-            <span className="text-bad tabular">{usd(total)}</span>
+            <span className="text-waste-500 tabular">{usd(total)}</span>
             {" identified in "}
-            <span className="text-fg tabular">{elapsed}s</span>
+            <span className="text-text-primary tabular">{elapsed}s</span>
           </span>
         </>
       )}
 
       {phase === "error" && (
         <>
-          <span className="size-2 rounded-full bg-bad" />
-          <span className="text-fg-subtle">stream unavailable (engine offline?)</span>
+          <span className="size-2 rounded-full bg-waste-500" />
+          <span className="text-text-faint">stream unavailable (engine offline?)</span>
         </>
       )}
     </div>

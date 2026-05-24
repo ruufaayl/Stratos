@@ -37,15 +37,15 @@ export function ProofModeToggle({ current, haveReal }: ProofModeToggleProps) {
   }
 
   return (
-    <div className="inline-flex items-center rounded-lg border border-border bg-bg-raised p-0.5 text-data-sm font-mono">
+    <div className="inline-flex items-center rounded-lg border border-border-subtle bg-bg-surface p-0.5 text-mono-sm font-mono">
       <button
         onClick={() => setMode("real")}
         disabled={!haveReal}
         title={!haveReal ? "Real-data summary not generated yet" : undefined}
         className={`px-3 py-1.5 rounded-md transition-colors ${
           current === "real"
-            ? "bg-brand text-fg"
-            : "text-fg-muted hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed"
+            ? "bg-intel-500 text-text-primary"
+            : "text-text-muted hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed"
         }`}
       >
         Real data · 248K VMs
@@ -54,8 +54,8 @@ export function ProofModeToggle({ current, haveReal }: ProofModeToggleProps) {
         onClick={() => setMode("synthetic")}
         className={`px-3 py-1.5 rounded-md transition-colors ${
           current === "synthetic"
-            ? "bg-brand text-fg"
-            : "text-fg-muted hover:text-fg"
+            ? "bg-intel-500 text-text-primary"
+            : "text-text-muted hover:text-text-primary"
         }`}
       >
         Live engine · 10 VMs

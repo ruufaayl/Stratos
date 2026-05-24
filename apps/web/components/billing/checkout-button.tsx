@@ -38,12 +38,12 @@ export function CheckoutButton() {
       <button
         onClick={handleClick}
         disabled={loading}
-        className="w-full px-4 py-2.5 rounded-md bg-brand hover:bg-brand-hover disabled:opacity-60 disabled:cursor-wait text-fg font-medium transition-colors text-sm"
+        className="w-full px-4 py-2.5 rounded-md bg-intel-500 hover:bg-intel-600 disabled:opacity-60 disabled:cursor-wait text-text-primary font-medium transition-colors text-sm"
       >
         {loading ? "Redirecting to Stripe…" : "Upgrade to Pro →"}
       </button>
       {error && (
-        <p className="text-bad text-xs font-mono">{error}</p>
+        <p className="text-waste-500 text-xs font-mono">{error}</p>
       )}
     </div>
   );

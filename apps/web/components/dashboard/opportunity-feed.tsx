@@ -11,7 +11,7 @@ interface OpportunityFeedProps {
 export function OpportunityFeed({ opportunities, explanations }: OpportunityFeedProps) {
   if (opportunities.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-bg-raised p-10 text-center text-fg-muted">
+      <div className="rounded-xl border border-border-subtle bg-bg-surface p-10 text-center text-text-muted">
         No opportunities found. Either everything is right-sized — or the engine
         hasn&apos;t run yet.
       </div>

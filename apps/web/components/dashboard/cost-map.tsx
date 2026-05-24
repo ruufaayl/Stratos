@@ -25,7 +25,7 @@ interface CostMapProps {
 export function CostMap({ nodes, width = 480, height = 360 }: CostMapProps) {
   if (nodes.length === 0) {
     return (
-      <div className="h-[360px] flex items-center justify-center text-fg-muted text-sm">
+      <div className="h-[360px] flex items-center justify-center text-text-muted text-sm">
         No cost data yet.
       </div>
     );

@@ -30,24 +30,24 @@ export default async function ProofPage({
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-border">
+      <header className="border-b border-border-subtle">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="size-2 rounded-full bg-good animate-pulse-dot" />
-            <Link href="/" className="text-fg font-semibold">
+            <div className="size-2 rounded-full bg-savings-500 animate-pulse-dot" />
+            <Link href="/" className="text-text-primary font-semibold">
               Stratos
             </Link>
-            <span className="text-fg-subtle text-data-sm font-mono">/ proof</span>
+            <span className="text-text-faint text-mono-sm font-mono">/ proof</span>
           </div>
-          <div className="flex items-center gap-4 text-data-sm font-mono">
+          <div className="flex items-center gap-4 text-mono-sm font-mono">
             <SignedOut>
-              <Link href="/pricing" className="text-fg-muted hover:text-fg">pricing</Link>
-              <Link href="/sign-up" className="text-brand hover:text-brand-hover">
+              <Link href="/pricing" className="text-text-muted hover:text-text-primary">pricing</Link>
+              <Link href="/sign-up" className="text-intel-300 hover:text-intel-300-hover">
                 connect your account →
               </Link>
             </SignedOut>
             <SignedIn>
-              <Link href="/dashboard" className="text-fg-muted hover:text-fg">dashboard</Link>
+              <Link href="/dashboard" className="text-text-muted hover:text-text-primary">dashboard</Link>
               <UserButton afterSignOutUrl="/" />
             </SignedIn>
           </div>
@@ -60,7 +60,7 @@ export default async function ProofPage({
             <ProofModeToggle current={mode} haveReal={!!real} />
             {mode === "synthetic" && <LiveScanTicker />}
             {mode === "real" && real && (
-              <div className="text-data-sm font-mono text-fg-subtle">
+              <div className="text-mono-sm font-mono text-text-faint">
                 analysed in {real.analysis_time_seconds.toFixed(1)}s · {real.throughput_vms_per_sec.toLocaleString()} VMs/s
               </div>
             )}
@@ -73,7 +73,7 @@ export default async function ProofPage({
           <SyntheticProofView />
         )}
 
-        <footer className="text-center text-fg-subtle text-xs font-mono py-8 border-t border-border">
+        <footer className="text-center text-text-faint text-xs font-mono py-8 border-t border-border-subtle">
           Real engine output. Python owns truth — every dollar reproduces.
           Source data and methodology in PROVENANCE.md (open source).
         </footer>
@@ -90,23 +90,23 @@ async function RealProofView({ data }: { data: NonNullable<Awaited<ReturnType<ty
   return (
     <>
       <section className="space-y-3">
-        <div className="text-fg-muted text-data-sm font-mono uppercase tracking-wide">
+        <div className="text-text-muted text-mono-sm font-mono uppercase tracking-wide">
           {data.source} · {data.license}
         </div>
         <h1 className="text-3xl md:text-5xl font-semibold tracking-tight">
           Stratos found{" "}
-          <span className="text-bad tabular">
+          <span className="text-waste-500 tabular">
             {usd(data.total_monthly_waste, { compact: true })}/mo
           </span>{" "}
           of waste in real Azure data
         </h1>
-        <p className="text-fg-muted text-lg">
+        <p className="text-text-muted text-lg">
           Analysed{" "}
-          <span className="text-fg tabular">{data.resource_count.toLocaleString()}</span>{" "}
+          <span className="text-text-primary tabular">{data.resource_count.toLocaleString()}</span>{" "}
           real production VMs in{" "}
-          <span className="text-fg tabular">{data.analysis_time_seconds.toFixed(1)}s</span>.
+          <span className="text-text-primary tabular">{data.analysis_time_seconds.toFixed(1)}s</span>.
           Surfaced{" "}
-          <span className="text-fg tabular">{data.opportunity_count.toLocaleString()}</span>{" "}
+          <span className="text-text-primary tabular">{data.opportunity_count.toLocaleString()}</span>{" "}
           ranked, dollar-quantified opportunities. Every number computed by Python — never invented by an LLM.
         </p>
 
@@ -140,8 +140,8 @@ async function RealProofView({ data }: { data: NonNullable<Awaited<ReturnType<ty
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <section className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-fg font-medium">Top opportunities</h2>
-            <span className="text-fg-subtle text-data-sm font-mono tabular">
+            <h2 className="text-text-primary font-medium">Top opportunities</h2>
+            <span className="text-text-faint text-mono-sm font-mono tabular">
               showing top {data.top_opportunities.length} of {data.opportunity_count.toLocaleString()}
             </span>
           </div>
@@ -153,16 +153,16 @@ async function RealProofView({ data }: { data: NonNullable<Awaited<ReturnType<ty
             <CardHeader>
               <CardTitle>How the engine sees it</CardTitle>
             </CardHeader>
-            <CardBody className="space-y-3 text-sm text-fg-muted">
+            <CardBody className="space-y-3 text-sm text-text-muted">
               {Object.entries(data.opportunity_count_by_kind).map(([kind, count]) => (
-                <div key={kind} className="flex justify-between border-b border-border pb-2 last:border-0">
-                  <span className="capitalize text-fg">{kind}</span>
-                  <span className="tabular text-fg-subtle font-mono">
+                <div key={kind} className="flex justify-between border-b border-border-subtle pb-2 last:border-0">
+                  <span className="capitalize text-text-primary">{kind}</span>
+                  <span className="tabular text-text-faint font-mono">
                     {count.toLocaleString()} opps
                   </span>
                 </div>
               ))}
-              <p className="text-xs font-mono text-fg-subtle pt-2 border-t border-border">
+              <p className="text-xs font-mono text-text-faint pt-2 border-t border-border-subtle">
                 Generated {new Date(data.generated_at).toUTCString()}
               </p>
             </CardBody>
@@ -172,26 +172,26 @@ async function RealProofView({ data }: { data: NonNullable<Awaited<ReturnType<ty
             <CardHeader>
               <CardTitle>Reproducibility</CardTitle>
             </CardHeader>
-            <CardBody className="space-y-3 text-sm text-fg-muted">
+            <CardBody className="space-y-3 text-sm text-text-muted">
               <p>
                 These numbers are deterministic. Re-run the proof harness
                 against{" "}
                 <a
                   href={data.source_url}
-                  className="text-brand hover:text-brand-hover underline underline-offset-4"
+                  className="text-intel-300 hover:text-intel-300-hover underline underline-offset-4"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   the same public dataset
                 </a>{" "}
                 and you&apos;ll get{" "}
-                <span className="tabular text-fg">{usd(data.total_monthly_waste)}</span>{" "}
+                <span className="tabular text-text-primary">{usd(data.total_monthly_waste)}</span>{" "}
                 back, every time.
               </p>
-              <p className="text-xs font-mono text-fg-subtle pt-2 border-t border-border">
-                Source: <span className="text-fg">proof/results/azure-v2-full-run.txt</span>
+              <p className="text-xs font-mono text-text-faint pt-2 border-t border-border-subtle">
+                Source: <span className="text-text-primary">proof/results/azure-v2-full-run.txt</span>
                 <br />
-                Code: <span className="text-fg">proof/loaders/azure_v2.py</span>
+                Code: <span className="text-text-primary">proof/loaders/azure_v2.py</span>
               </p>
             </CardBody>
           </Card>
@@ -200,14 +200,14 @@ async function RealProofView({ data }: { data: NonNullable<Awaited<ReturnType<ty
             <CardHeader>
               <CardTitle>Want this on your real account?</CardTitle>
             </CardHeader>
-            <CardBody className="space-y-3 text-sm text-fg-muted">
+            <CardBody className="space-y-3 text-sm text-text-muted">
               <p>
                 Read-only IAM. Under 10 minutes to connect. Stratos describes
                 your resources and pulls CloudWatch metrics — never writes.
               </p>
               <Link
                 href="/pricing"
-                className="inline-block px-4 py-2 rounded-md bg-brand hover:bg-brand-hover text-fg font-medium text-sm transition-colors"
+                className="inline-block px-4 py-2 rounded-md bg-intel-500 hover:bg-intel-600 text-text-primary font-medium text-sm transition-colors"
               >
                 See pricing →
               </Link>
@@ -231,18 +231,18 @@ function StatTile({
   color?: "bad";
 }) {
   return (
-    <div className="rounded-xl border border-border bg-bg-raised p-4">
-      <div className="text-fg-subtle text-data-sm font-mono uppercase tracking-wide">
+    <div className="rounded-xl border border-border-subtle bg-bg-surface p-4">
+      <div className="text-text-faint text-mono-sm font-mono uppercase tracking-wide">
         {label}
       </div>
       <div
         className={`mt-1 text-2xl font-semibold tabular ${
-          color === "bad" ? "text-bad" : "text-fg"
+          color === "bad" ? "text-waste-500" : "text-text-primary"
         }`}
       >
         {value}
       </div>
-      <div className="text-fg-subtle text-xs font-mono">{sub}</div>
+      <div className="text-text-faint text-xs font-mono">{sub}</div>
     </div>
   );
 }
@@ -258,15 +258,15 @@ async function SyntheticProofView() {
   } catch (err) {
     return (
       <div className="text-center space-y-3 py-20">
-        <div className="text-bad text-data-sm font-mono">engine unreachable</div>
-        <div className="text-fg-muted">
+        <div className="text-waste-500 text-mono-sm font-mono">engine unreachable</div>
+        <div className="text-text-muted">
           The Stratos engine isn&apos;t responding. Start it locally with{" "}
-          <code className="bg-bg-subtle px-1.5 py-0.5 rounded font-mono text-sm">
+          <code className="bg-bg-elevated px-1.5 py-0.5 rounded font-mono text-sm">
             pnpm engine:dev
           </code>
           .
         </div>
-        <div className="text-fg-subtle text-sm font-mono">
+        <div className="text-text-faint text-sm font-mono">
           {err instanceof Error ? err.message : "unknown error"}
         </div>
       </div>
@@ -290,17 +290,17 @@ async function SyntheticProofView() {
   return (
     <>
       <section className="space-y-3">
-        <div className="text-fg-muted text-data-sm font-mono uppercase tracking-wide">
+        <div className="text-text-muted text-mono-sm font-mono uppercase tracking-wide">
           Live demo · {data.source}
         </div>
         <h1 className="text-3xl md:text-5xl font-semibold tracking-tight">
           Stratos found{" "}
-          <span className="text-bad tabular">
+          <span className="text-waste-500 tabular">
             {usd(data.total_monthly_waste, { compact: true })}
           </span>{" "}
           of monthly waste
         </h1>
-        <p className="text-fg-muted text-lg">
+        <p className="text-text-muted text-lg">
           Analyzed {data.resource_count} VMs in milliseconds. Surfaced{" "}
           {data.opportunity_count} ranked, dollar-quantified opportunities. All
           math is computed by Python — never invented by an LLM.
@@ -320,8 +320,8 @@ async function SyntheticProofView() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <section className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-fg font-medium">Opportunities</h2>
-            <span className="text-fg-subtle text-data-sm font-mono tabular">
+            <h2 className="text-text-primary font-medium">Opportunities</h2>
+            <span className="text-text-faint text-mono-sm font-mono tabular">
               {data.opportunity_count} ranked by $/mo
             </span>
           </div>
@@ -335,12 +335,12 @@ async function SyntheticProofView() {
             </CardHeader>
             <CardBody>
               <CostMap nodes={data.cost_map} />
-              <div className="mt-3 flex items-center justify-between text-xs font-mono text-fg-subtle">
+              <div className="mt-3 flex items-center justify-between text-xs font-mono text-text-faint">
                 <span>area = monthly cost</span>
                 <span className="flex items-center gap-2">
-                  <span className="size-2 rounded-sm bg-good" /> efficient
-                  <span className="size-2 rounded-sm bg-warn ml-2" /> risky
-                  <span className="size-2 rounded-sm bg-bad ml-2" /> wasteful
+                  <span className="size-2 rounded-sm bg-savings-500" /> efficient
+                  <span className="size-2 rounded-sm bg-risk-500 ml-2" /> risky
+                  <span className="size-2 rounded-sm bg-waste-500 ml-2" /> wasteful
                 </span>
               </div>
             </CardBody>
@@ -358,25 +358,25 @@ async function SyntheticProofView() {
                 lower={data.forecast.lower}
                 anomalyDays={data.planted_anomaly_days}
               />
-              <div className="mt-3 grid grid-cols-2 gap-3 text-data-sm">
+              <div className="mt-3 grid grid-cols-2 gap-3 text-mono-sm">
                 <div>
-                  <div className="text-fg-subtle font-mono uppercase text-xs">
+                  <div className="text-text-faint font-mono uppercase text-xs">
                     Quarter projection
                   </div>
-                  <div className="tabular text-fg">
+                  <div className="tabular text-text-primary">
                     {usd(data.forecast.projected_quarter_total)}
                   </div>
                 </div>
                 <div>
-                  <div className="text-fg-subtle font-mono uppercase text-xs">
+                  <div className="text-text-faint font-mono uppercase text-xs">
                     Uncertainty @ T
                   </div>
-                  <div className="tabular text-fg">
+                  <div className="tabular text-text-primary">
                     ±{usd(data.forecast.uncertainty_at_horizon)}/day
                   </div>
                 </div>
               </div>
-              <div className="mt-4 text-fg-subtle text-xs font-mono">
+              <div className="mt-4 text-text-faint text-xs font-mono">
                 Confidence band widens with √t (uncertainty compounds).
               </div>
             </CardBody>

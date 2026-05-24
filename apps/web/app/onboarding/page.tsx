@@ -22,14 +22,14 @@ export default async function OnboardingPage() {
 
   return (
     <main className="min-h-screen flex flex-col">
-      <header className="border-b border-border">
+      <header className="border-b border-border-subtle">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="size-2 rounded-full bg-good animate-pulse-dot" />
-            <Link href="/" className="text-fg font-semibold">
+            <div className="size-2 rounded-full bg-savings-500 animate-pulse-dot" />
+            <Link href="/" className="text-text-primary font-semibold">
               Stratos
             </Link>
-            <span className="text-fg-subtle text-data-sm font-mono">/ connect</span>
+            <span className="text-text-faint text-mono-sm font-mono">/ connect</span>
           </div>
           <UserButton afterSignOutUrl="/" />
         </div>
@@ -37,8 +37,8 @@ export default async function OnboardingPage() {
 
       <div className="flex-1 max-w-3xl mx-auto px-6 py-12 w-full">
         <div className="space-y-2 mb-10">
-          <h1 className="text-3xl font-semibold text-fg">Connect your AWS account</h1>
-          <p className="text-fg-muted">
+          <h1 className="text-3xl font-semibold text-text-primary">Connect your AWS account</h1>
+          <p className="text-text-muted">
             Read-only setup. Stratos never writes to your infrastructure.
             Takes under 10 minutes via a cross-account IAM role.
           </p>
