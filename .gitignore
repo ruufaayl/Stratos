@@ -53,3 +53,6 @@ data/
 
 # Storybook build output
 apps/web/storybook-static/
+
+# Local Claude harness config (per-machine)
+.claude/
