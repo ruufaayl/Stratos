@@ -22,6 +22,7 @@
     "@aws-sdk/client-cost-explorer": "^3.1053.0",
     "@aws-sdk/client-ec2": "^3.1053.0",
     "@aws-sdk/client-sts": "^3.1053.0",
+    "@clerk/elements": "^0.24.13",
     "@clerk/nextjs": "^6.9.0",
     "@neondatabase/serverless": "^0.10.4",
     "@next/env": "14.2.26",
