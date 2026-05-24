@@ -32,6 +32,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <html lang="en" className={`dark ${manrope.variable} ${jetbrainsMono.variable}`}>
         <body>
           <Suspense fallback={null}>
+            {/* PostHog uses useSearchParams — must be inside Suspense per
+                Next.js 14 rules for client hooks that read the URL. */}
             <PostHogProvider>{children}</PostHogProvider>
           </Suspense>
         </body>

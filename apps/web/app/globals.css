@@ -45,9 +45,6 @@
 
 /* ─────────── Base layer ─────────── */
 @layer base {
-  html {
-    color-scheme: dark;
-  }
   body {
     @apply bg-bg-canvas text-text-primary antialiased;
     font-family: var(--font-sans);

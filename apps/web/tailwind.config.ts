@@ -57,6 +57,12 @@ const config: Config = {
         "kpi":       ["2rem",     { lineHeight: "2.25rem", letterSpacing: "-0.02em" }],
         "kpi-hero":  ["3rem",     { lineHeight: "3.25rem", letterSpacing: "-0.025em" }],
         "display":   ["3.5rem",   { lineHeight: "3.75rem", letterSpacing: "-0.03em" }],
+        "h1":        ["2rem",     { lineHeight: "2.25rem",  letterSpacing: "-0.02em" }],
+        "h2":        ["1.5rem",   { lineHeight: "1.75rem",  letterSpacing: "-0.015em" }],
+        "h3":        ["1.125rem", { lineHeight: "1.375rem", letterSpacing: "-0.01em" }],
+        "body":      ["0.875rem", { lineHeight: "1.375rem" }],
+        "sm":        ["0.8125rem",{ lineHeight: "1.25rem"  }],
+        "xs":        ["0.75rem",  { lineHeight: "1.125rem" }],
       },
       borderRadius: {
         chip: "4px",
