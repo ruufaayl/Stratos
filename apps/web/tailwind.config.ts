@@ -1,8 +1,8 @@
 import type { Config } from "tailwindcss";
 
-// Stratos design tokens — dark-first command center.
-// Palette from CLAUDE.md: indigo (intelligence), emerald (savings),
-// red (waste), amber (risk). Engineers work at night. #0A0A0F background.
+// Stratos design tokens v2 — see docs/superpowers/specs/2026-05-24-brand-identity-design.md
+// Colors are CSS variables (defined in globals.css) so they're available outside Tailwind too
+// (Recharts, inline SVG, etc. via lib/design/tokens.ts).
 const config: Config = {
   darkMode: "class",
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
@@ -10,45 +10,78 @@ const config: Config = {
     extend: {
       colors: {
         bg: {
-          DEFAULT: "#0A0A0F",       // app background — pure night
-          raised: "#10101A",        // cards, surfaces
-          subtle: "#16161F",        // hover, secondary surfaces
+          canvas:   "rgb(var(--bg-canvas)   / <alpha-value>)",
+          surface:  "rgb(var(--bg-surface)  / <alpha-value>)",
+          elevated: "rgb(var(--bg-elevated) / <alpha-value>)",
+          sunken:   "rgb(var(--bg-sunken)   / <alpha-value>)",
         },
         border: {
-          DEFAULT: "#1F1F2B",
-          strong: "#2A2A38",
+          subtle: "rgb(var(--border-subtle) / <alpha-value>)",
+          strong: "rgb(var(--border-strong) / <alpha-value>)",
         },
-        fg: {
-          DEFAULT: "#E8E8F0",
-          muted: "#9090A8",
-          subtle: "#5E5E78",
+        text: {
+          primary:   "rgb(var(--text-primary)   / <alpha-value>)",
+          secondary: "rgb(var(--text-secondary) / <alpha-value>)",
+          muted:     "rgb(var(--text-muted)     / <alpha-value>)",
+          faint:     "rgb(var(--text-faint)     / <alpha-value>)",
         },
-        brand: {
-          DEFAULT: "#6366F1",       // indigo — intelligence, trust
-          hover: "#7479F4",
+        intel: {
+          300: "rgb(var(--intel-300) / <alpha-value>)",
+          500: "rgb(var(--intel-500) / <alpha-value>)",
+          950: "rgb(var(--intel-950) / <alpha-value>)",
         },
-        good: "#10B981",            // emerald — savings, efficiency
-        bad: "#EF4444",              // red — waste, money burning
-        warn: "#F59E0B",             // amber — risk, attention
+        savings: {
+          300: "rgb(var(--savings-300) / <alpha-value>)",
+          500: "rgb(var(--savings-500) / <alpha-value>)",
+          950: "rgb(var(--savings-950) / <alpha-value>)",
+        },
+        waste: {
+          300: "rgb(var(--waste-300) / <alpha-value>)",
+          500: "rgb(var(--waste-500) / <alpha-value>)",
+          950: "rgb(var(--waste-950) / <alpha-value>)",
+        },
+        risk: {
+          300: "rgb(var(--risk-300) / <alpha-value>)",
+          500: "rgb(var(--risk-500) / <alpha-value>)",
+          950: "rgb(var(--risk-950) / <alpha-value>)",
+        },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       fontSize: {
-        // data-dense: tight tracking, slightly larger numerals
-        "data-sm": ["0.8125rem", { lineHeight: "1.25rem", letterSpacing: "-0.005em" }],
-        "data-lg": ["1.5rem", { lineHeight: "1.75rem", letterSpacing: "-0.02em" }],
-        "data-xl": ["2.25rem", { lineHeight: "2.5rem", letterSpacing: "-0.02em" }],
+        "mono-xs":   ["0.6875rem", { lineHeight: "1rem",    letterSpacing: "0.18em" }],
+        "mono-sm":   ["0.8125rem", { lineHeight: "1.125rem" }],
+        "kpi-sm":    ["1.5rem",   { lineHeight: "1.75rem", letterSpacing: "-0.02em" }],
+        "kpi":       ["2rem",     { lineHeight: "2.25rem", letterSpacing: "-0.02em" }],
+        "kpi-hero":  ["3rem",     { lineHeight: "3.25rem", letterSpacing: "-0.025em" }],
+        "display":   ["3.5rem",   { lineHeight: "3.75rem", letterSpacing: "-0.03em" }],
+        "h1":        ["2rem",     { lineHeight: "2.25rem",  letterSpacing: "-0.02em" }],
+        "h2":        ["1.5rem",   { lineHeight: "1.75rem",  letterSpacing: "-0.015em" }],
+        "h3":        ["1.125rem", { lineHeight: "1.375rem", letterSpacing: "-0.01em" }],
+        "body":      ["0.875rem", { lineHeight: "1.375rem" }],
+        "sm":        ["0.8125rem",{ lineHeight: "1.25rem"  }],
+        "xs":        ["0.75rem",  { lineHeight: "1.125rem" }],
+      },
+      borderRadius: {
+        chip: "4px",
+        DEFAULT: "8px",
+        card: "14px",
+        modal: "20px",
+      },
+      transitionTimingFunction: {
+        out:   "cubic-bezier(0.16, 1, 0.3, 1)",
+        inOut: "cubic-bezier(0.65, 0, 0.35, 1)",
+        in:    "cubic-bezier(0.4, 0, 1, 1)",
       },
       keyframes: {
-        "pulse-dot": {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.4" },
-        },
+        "pulse-dot": { "0%, 100%": { opacity: "1" }, "50%": { opacity: "0.4" } },
+        "scan":      { "0%": { transform: "translateX(-100%)" }, "100%": { transform: "translateX(100%)" } },
       },
       animation: {
         "pulse-dot": "pulse-dot 2s ease-in-out infinite",
+        "scan":      "scan 8s linear infinite",
       },
     },
   },

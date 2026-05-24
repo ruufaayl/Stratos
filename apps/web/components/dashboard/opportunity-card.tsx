@@ -65,27 +65,27 @@ export function OpportunityCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: index * 0.04, ease: "easeOut" }}
       className={cn(
-        "rounded-xl border border-border bg-bg-raised p-5",
+        "rounded-xl border border-border-subtle bg-bg-surface p-5",
         "hover:border-border-strong transition-colors",
         ringClass,
       )}
     >
       <div className="flex items-baseline justify-between gap-4">
-        <div className="text-data-lg font-semibold tabular text-good">
+        <div className="text-kpi-sm font-semibold tabular text-savings-500">
           💰 Save {usd(opp.monthly_savings)}/mo
         </div>
-        <div className="text-data-sm font-mono text-fg-muted">
-          <span className="text-brand">{confidenceDots(opp.risk)}</span>
+        <div className="text-mono-sm font-mono text-text-muted">
+          <span className="text-intel-300">{confidenceDots(opp.risk)}</span>
           <span className="ml-2 tabular">
             {((1 - (opp.risk ?? 0)) * 100).toFixed(0)}% conf
           </span>
         </div>
       </div>
-      <div className="mt-2 text-fg font-medium">{headline(opp)}</div>
-      <div className="mt-1 text-fg-muted text-sm">{evidence(opp)}</div>
+      <div className="mt-2 text-text-primary font-medium">{headline(opp)}</div>
+      <div className="mt-1 text-text-muted text-sm">{evidence(opp)}</div>
       {explanation && (
-        <div className="mt-3 pt-3 border-t border-border text-fg-muted text-sm">
-          <span className="text-fg-subtle font-mono text-xs uppercase mr-2">
+        <div className="mt-3 pt-3 border-t border-border-subtle text-text-muted text-sm">
+          <span className="text-text-faint font-mono text-xs uppercase mr-2">
             Why?
           </span>
           {explanation}

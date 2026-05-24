@@ -2,16 +2,76 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────── Design tokens (see specs/2026-05-24-brand-identity-design.md) ─────────── */
+:root {
+  /* Backgrounds */
+  --bg-canvas:    10  14  26;   /* #0A0E1A */
+  --bg-surface:   15  22  38;   /* #0F1626 */
+  --bg-elevated:  20  27  46;   /* #141B2E */
+  --bg-sunken:     5   8  17;   /* #050811 */
+
+  /* Borders */
+  --border-subtle: 28 35 51;    /* #1C2333 */
+  --border-strong: 42 51 73;    /* #2A3349 */
+
+  /* Text */
+  --text-primary:   241 245 249; /* #F1F5F9 */
+  --text-secondary: 203 213 225; /* #CBD5E1 */
+  --text-muted:     148 163 184; /* #94A3B8 */
+  --text-faint:     100 116 139; /* #64748B */
+
+  /* Semantic: intelligence (indigo) */
+  --intel-300: 165 180 252;  /* #A5B4FC */
+  --intel-500:  99 102 241;  /* #6366F1 */
+  --intel-950:  30  27  75;  /* #1E1B4B */
+
+  /* Semantic: savings (green) */
+  --savings-300:  52 211 153; /* #34D399 */
+  --savings-500:   0 172 105; /* #00AC69 */
+  --savings-950:   5  46  28; /* #052E1C */
+
+  /* Semantic: waste (red) */
+  --waste-300: 252 165 165;  /* #FCA5A5 */
+  --waste-500: 239  68  68;  /* #EF4444 */
+  --waste-950:  59  18  18;  /* #3B1212 */
+
+  /* Semantic: risk (amber) */
+  --risk-300: 252 211  77;   /* #FCD34D */
+  --risk-500: 245 158  11;   /* #F59E0B */
+  --risk-950:  59  42  10;   /* #3B2A0A */
+
+  color-scheme: dark;
+}
+
+/* ─────────── Base layer ─────────── */
 @layer base {
-  html {
-    color-scheme: dark;
-  }
   body {
-    @apply bg-bg text-fg antialiased;
-    font-feature-settings: "ss01", "cv11", "tnum";
+    @apply bg-bg-canvas text-text-primary antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
   }
-  /* Tabular nums for $ figures — every number tells a story. */
-  .tabular {
-    font-variant-numeric: tabular-nums;
+
+  /* Every interactive element gets the spec-mandated focus ring */
+  :where(button, a, [role="button"], [role="tab"], [role="menuitem"], input, select, textarea, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid rgb(var(--intel-500));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; }
+  .font-numeric { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+}
+
+/* ─────────── Reduced motion ─────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

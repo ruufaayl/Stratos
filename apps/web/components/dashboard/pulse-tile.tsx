@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Sparkline } from "@/components/ui/sparkline";
+import type { SemanticKind } from "@/lib/design/tokens";
 import { cn, usd } from "@/lib/utils";
 
 interface PulseTileProps {
@@ -26,39 +27,38 @@ export function PulseTile({
 
   const deltaColor =
     delta === undefined
-      ? "text-fg-subtle"
+      ? "text-text-faint"
       : deltaIsGood
-        ? "text-good"
-        : "text-bad";
+        ? "text-savings-500"
+        : "text-waste-500";
 
-  const sparklineColor =
-    semantic === "good" ? "#10B981" : semantic === "bad" ? "#EF4444" : "#6366F1";
+  const sparklineKind: SemanticKind =
+    semantic === "good" ? "savings" : semantic === "bad" ? "waste" : "intelligence";
 
   return (
     <Card className="p-5">
-      <div className="text-data-sm font-mono uppercase tracking-wide text-fg-muted">
+      <div className="text-mono-sm font-mono uppercase tracking-wide text-text-muted">
         {label}
       </div>
       <div className="mt-2 flex items-end justify-between gap-3">
-        <div className="text-data-xl font-semibold tabular text-fg">
+        <div className="text-kpi font-semibold tabular text-text-primary">
           {format === "currency" ? usd(value, { compact: true }) : value.toLocaleString()}
         </div>
         {sparkline && sparkline.length > 1 && (
-          <div className="text-fg-muted">
+          <div className="text-text-muted">
             <Sparkline
-              values={sparkline}
+              data={sparkline}
+              kind={sparklineKind}
               width={88}
               height={28}
-              stroke={sparklineColor}
-              fill={sparklineColor}
             />
           </div>
         )}
       </div>
       {delta !== undefined && (
-        <div className={cn("mt-2 text-data-sm font-mono tabular", deltaColor)}>
+        <div className={cn("mt-2 text-mono-sm font-mono tabular", deltaColor)}>
           {deltaPositive ? "▲" : "▼"} {Math.abs(delta).toFixed(1)}%
-          <span className="ml-1 text-fg-subtle">vs last week</span>
+          <span className="ml-1 text-text-faint">vs last week</span>
         </div>
       )}
     </Card>

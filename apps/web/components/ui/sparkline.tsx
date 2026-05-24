@@ -1,52 +1,64 @@
-interface SparklineProps {
-  values: number[];
+"use client";
+import * as React from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { sparklineDraw } from "@/lib/design/motion";
+import { semanticColor, type SemanticKind } from "@/lib/design/tokens";
+
+type SparklineProps = {
+  data: number[];
+  kind?: SemanticKind;
   width?: number;
   height?: number;
-  stroke?: string;
-  fill?: string;
   className?: string;
-}
+  /** Plain-language label for screen readers. */
+  srLabel?: string;
+};
 
-/** Inline SVG sparkline — no library, no JS runtime cost. */
 export function Sparkline({
-  values,
-  width = 120,
-  height = 32,
-  stroke = "currentColor",
-  fill,
+  data,
+  kind = "savings",
+  width = 280,
+  height = 50,
   className,
+  srLabel,
 }: SparklineProps) {
-  if (values.length < 2) return null;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const step = width / (values.length - 1);
-
-  const points = values
-    .map((v, i) => `${i * step},${height - ((v - min) / range) * height}`)
-    .join(" ");
-
-  const fillPath = fill
-    ? `M0,${height} L${points.split(" ").map((p) => p).join(" L")} L${width},${height} Z`
-    : null;
+  const reduce = useReducedMotion();
+  const stroke = semanticColor[kind];
+  const points = pointsFor(data, width, height);
+  const path = `M ${points.map((p) => `${p.x},${p.y}`).join(" L ")}`;
+  const last = points[points.length - 1];
 
   return (
     <svg
-      width={width}
-      height={height}
       viewBox={`0 0 ${width} ${height}`}
+      width="100%"
+      height={height}
       className={className}
-      preserveAspectRatio="none"
+      role={srLabel ? "img" : undefined}
+      aria-label={srLabel}
     >
-      {fillPath && <path d={fillPath} fill={fill} opacity={0.15} />}
-      <polyline
-        points={points}
+      <motion.path
+        d={path}
         fill="none"
         stroke={stroke}
         strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        initial={reduce ? false : { pathLength: 0, opacity: 0 }}
+        animate={reduce ? undefined : { pathLength: 1, opacity: 1 }}
+        transition={sparklineDraw}
       />
+      {last ? <circle cx={last.x} cy={last.y} r={3} fill={stroke} /> : null}
     </svg>
   );
+}
+
+function pointsFor(data: number[], w: number, h: number) {
+  if (data.length === 0) return [];
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const span = max - min || 1;
+  const pad = 4;
+  return data.map((v, i) => ({
+    x: (i / Math.max(1, data.length - 1)) * w,
+    y: h - pad - ((v - min) / span) * (h - pad * 2),
+  }));
 }

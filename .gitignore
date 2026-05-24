@@ -49,3 +49,7 @@ data/
 # misc
 .turbo/
 .cache/
+.superpowers/
+
+# Storybook build output
+apps/web/storybook-static/

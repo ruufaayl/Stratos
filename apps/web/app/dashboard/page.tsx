@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import { eq, desc } from "drizzle-orm";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { db, schema } from "@/lib/db";
 import { usd } from "@/lib/utils";
 
@@ -32,21 +32,21 @@ export default async function DashboardPage() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-border">
+      <header className="border-b border-border-subtle">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="size-2 rounded-full bg-good animate-pulse-dot" />
-            <Link href="/" className="text-fg font-semibold">
+            <div className="size-2 rounded-full bg-savings-500 animate-pulse-dot" />
+            <Link href="/" className="text-text-primary font-semibold">
               Stratos
             </Link>
-            <span className="text-fg-subtle text-data-sm font-mono">
+            <span className="text-text-faint text-mono-sm font-mono">
               / dashboard
             </span>
           </div>
-          <div className="flex items-center gap-4 text-data-sm font-mono">
+          <div className="flex items-center gap-4 text-mono-sm font-mono">
             <Link
               href="/proof"
-              className="text-fg-muted hover:text-fg"
+              className="text-text-muted hover:text-text-primary"
             >
               public demo →
             </Link>
@@ -57,8 +57,8 @@ export default async function DashboardPage() {
 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-fg">Your dashboard</h1>
-          <p className="text-fg-muted mt-1">
+          <h1 className="text-2xl font-semibold text-text-primary">Your dashboard</h1>
+          <p className="text-text-muted mt-1">
             Connect a cloud account to see waste analysis on your real
             infrastructure.
           </p>
@@ -69,8 +69,8 @@ export default async function DashboardPage() {
             <CardHeader>
               <CardTitle>Connect your first account</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-fg-muted">
+            <CardBody className="space-y-3">
+              <p className="text-text-muted">
                 AWS connection is read-only — Stratos describes your resources
                 and pulls CloudWatch metrics, never writes to your account.
                 Setup takes under 10 minutes via a cross-account IAM role.
@@ -78,18 +78,18 @@ export default async function DashboardPage() {
               <div className="flex items-center gap-3 pt-2">
                 <Link
                   href="/onboarding"
-                  className="px-4 py-2 rounded-md bg-brand hover:bg-brand-hover text-fg font-medium transition-colors text-sm"
+                  className="px-4 py-2 rounded-md bg-intel-500 hover:bg-intel-600 text-text-primary font-medium transition-colors text-sm"
                 >
                   Connect AWS account →
                 </Link>
                 <Link
                   href="/proof"
-                  className="text-data-sm font-mono text-brand hover:text-brand-hover"
+                  className="text-mono-sm font-mono text-intel-300 hover:text-intel-300-hover"
                 >
                   see the engine on public data →
                 </Link>
               </div>
-            </CardContent>
+            </CardBody>
           </Card>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -97,41 +97,41 @@ export default async function DashboardPage() {
               <CardHeader>
                 <CardTitle>Accounts</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardBody>
                 <ul className="space-y-2 text-sm">
                   {userAccounts.map((a) => (
                     <li
                       key={a.id}
-                      className="flex justify-between items-center py-2 border-b border-border last:border-0"
+                      className="flex justify-between items-center py-2 border-b border-border-subtle last:border-0"
                     >
-                      <span className="text-fg font-medium">{a.name}</span>
-                      <span className="text-fg-subtle font-mono text-xs">
+                      <span className="text-text-primary font-medium">{a.name}</span>
+                      <span className="text-text-faint font-mono text-xs">
                         {a.provider}
                       </span>
                     </li>
                   ))}
                 </ul>
-              </CardContent>
+              </CardBody>
             </Card>
 
             <Card>
               <CardHeader>
                 <CardTitle>Recent runs</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardBody>
                 {recentRuns.length === 0 ? (
-                  <div className="text-fg-muted text-sm">No runs yet.</div>
+                  <div className="text-text-muted text-sm">No runs yet.</div>
                 ) : (
                   <ul className="space-y-2 text-sm">
                     {recentRuns.map((r) => (
                       <li
                         key={r.id}
-                        className="flex justify-between items-center py-2 border-b border-border last:border-0"
+                        className="flex justify-between items-center py-2 border-b border-border-subtle last:border-0"
                       >
-                        <span className="text-fg-subtle font-mono text-xs">
+                        <span className="text-text-faint font-mono text-xs">
                           {new Date(r.startedAt).toLocaleString()}
                         </span>
-                        <span className="text-fg tabular">
+                        <span className="text-text-primary tabular">
                           {r.totalMonthlyWaste
                             ? usd(Number(r.totalMonthlyWaste))
                             : "—"}
@@ -140,7 +140,7 @@ export default async function DashboardPage() {
                     ))}
                   </ul>
                 )}
-              </CardContent>
+              </CardBody>
             </Card>
           </div>
         )}
