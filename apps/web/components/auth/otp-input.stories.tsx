@@ -14,18 +14,22 @@ export default meta;
 
 type Story = StoryObj<typeof OtpInput>;
 
+function OtpEmpty() {
+  const [value, setValue] = React.useState("");
+  return <OtpInput value={value} onChange={setValue} />;
+}
+
+function OtpPreFilled() {
+  const [value, setValue] = React.useState("483920");
+  return <OtpInput value={value} onChange={setValue} />;
+}
+
 /** Empty — waiting for user input */
 export const Empty: Story = {
-  render: () => {
-    const [value, setValue] = React.useState("");
-    return <OtpInput value={value} onChange={setValue} />;
-  },
+  render: () => <OtpEmpty />,
 };
 
 /** Pre-filled — code already entered */
 export const PreFilled: Story = {
-  render: () => {
-    const [value, setValue] = React.useState("483920");
-    return <OtpInput value={value} onChange={setValue} />;
-  },
+  render: () => <OtpPreFilled />,
 };

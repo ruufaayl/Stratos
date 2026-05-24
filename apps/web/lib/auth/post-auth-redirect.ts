@@ -24,6 +24,10 @@ export async function postAuthRedirectFor(
   const orgs = memberships.data;
 
   if (orgs.length === 0) return "/orgs/create";
-  if (orgs.length === 1) return `/app/${orgs[0].organization.slug}`;
+  if (orgs.length === 1) {
+    const slug = orgs[0]?.organization.slug;
+    // If the org has no slug yet (edge case during creation), fall back to picker
+    return slug ? `/app/${slug}` : "/orgs";
+  }
   return "/orgs";
 }

@@ -14,10 +14,12 @@ export default meta;
 
 type Story = StoryObj<typeof SigilPicker>;
 
+function SigilPickerDefault() {
+  const [color, setColor] = React.useState<string>(SIGIL_COLORS[0]);
+  return <SigilPicker value={color} onChange={setColor} />;
+}
+
 /** Default — interactive colour picker with first colour pre-selected */
 export const Default: Story = {
-  render: () => {
-    const [color, setColor] = React.useState<string>(SIGIL_COLORS[0]);
-    return <SigilPicker value={color} onChange={setColor} />;
-  },
+  render: () => <SigilPickerDefault />,
 };

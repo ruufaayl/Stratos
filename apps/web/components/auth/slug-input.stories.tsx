@@ -14,66 +14,67 @@ export default meta;
 
 type Story = StoryObj<typeof SlugInput>;
 
-/** Empty — initial state before user types */
-export const Empty: Story = {
-  render: () => {
-    const [value, setValue] = React.useState("");
-    return (
-      <div style={{ width: 320 }}>
-        <SlugInput value={value} onChange={setValue} />
-      </div>
-    );
-  },
-};
+// ── Story components ─────────────────────────────────────────────────────────
+
+function SlugEmpty() {
+  const [value, setValue] = React.useState("");
+  return (
+    <div style={{ width: 320 }}>
+      <SlugInput value={value} onChange={setValue} />
+    </div>
+  );
+}
 
 /**
- * Valid — user has typed a valid available slug.
+ * Valid — slug passes format validation.
  * Fetch is shimmed to return { ok: true } so the "Available" status renders.
  */
-export const Valid: Story = {
-  render: () => {
-    const [value, setValue] = React.useState("acme-corp");
-    return (
-      <div style={{ width: 320 }}>
-        <SlugInput value={value} onChange={setValue} />
-      </div>
-    );
-  },
-  decorators: [
-    (Story) => {
-      // Shim fetch so SlugInput's API call returns "available"
-      globalThis.fetch = async (_input: RequestInfo | URL) =>
-        new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      return <Story />;
-    },
-  ],
-};
+function SlugValid() {
+  const [value, setValue] = React.useState("acme-corp");
+  // Shim fetch before first render so the debounced check sees it immediately.
+  globalThis.fetch = async (_input: RequestInfo | URL) =>
+    new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  return (
+    <div style={{ width: 320 }}>
+      <SlugInput value={value} onChange={setValue} />
+    </div>
+  );
+}
 
 /**
  * Taken — slug is valid format but already in use.
  * Fetch is shimmed to return { ok: false, reason: "taken" }.
  */
+function SlugTaken() {
+  const [value, setValue] = React.useState("stripe");
+  globalThis.fetch = async (_input: RequestInfo | URL) =>
+    new Response(JSON.stringify({ ok: false, reason: "taken" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  return (
+    <div style={{ width: 320 }}>
+      <SlugInput value={value} onChange={setValue} />
+    </div>
+  );
+}
+
+// ── Stories ───────────────────────────────────────────────────────────────────
+
+/** Empty — initial state before user types */
+export const Empty: Story = {
+  render: () => <SlugEmpty />,
+};
+
+/** Valid — available slug */
+export const Valid: Story = {
+  render: () => <SlugValid />,
+};
+
+/** Taken — slug already in use */
 export const Taken: Story = {
-  render: () => {
-    const [value, setValue] = React.useState("stripe");
-    return (
-      <div style={{ width: 320 }}>
-        <SlugInput value={value} onChange={setValue} />
-      </div>
-    );
-  },
-  decorators: [
-    (Story) => {
-      // Shim fetch so SlugInput's API call returns "taken"
-      globalThis.fetch = async (_input: RequestInfo | URL) =>
-        new Response(JSON.stringify({ ok: false, reason: "taken" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      return <Story />;
-    },
-  ],
+  render: () => <SlugTaken />,
 };
