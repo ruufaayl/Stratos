@@ -1,4 +1,5 @@
 import type { StorybookConfig } from "@storybook/react-vite";
+import path from "path";
 
 const config: StorybookConfig = {
   framework: { name: "@storybook/react-vite", options: {} },
@@ -10,6 +11,14 @@ const config: StorybookConfig = {
   ],
   staticDirs: ["../public"],
   typescript: { check: false, reactDocgen: "react-docgen-typescript" },
+  viteFinal(config) {
+    config.resolve = config.resolve ?? {};
+    config.resolve.alias = {
+      ...(config.resolve.alias as Record<string, string> | undefined),
+      "@": path.resolve(__dirname, ".."),
+    };
+    return config;
+  },
 };
 
 export default config;
