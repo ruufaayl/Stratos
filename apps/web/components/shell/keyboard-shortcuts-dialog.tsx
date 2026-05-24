@@ -26,14 +26,15 @@ const SCOPE_ORDER: Scope[] = ["global", "app", "modal"];
  * ["["] → "["
  */
 function formatKeys(keys: readonly string[]): string {
-  if (keys.length === 2 && keys[0] === "mod") {
-    const second = keys[1].toUpperCase();
-    return `⌘${second}`;
+  const k0 = keys[0] ?? "";
+  const k1 = keys[1] ?? "";
+  if (keys.length === 2 && k0 === "mod") {
+    return `⌘${k1.toUpperCase()}`;
   }
   if (keys.length === 2) {
-    return `${keys[0].toUpperCase()} then ${keys[1].toUpperCase()}`;
+    return `${k0.toUpperCase()} then ${k1.toUpperCase()}`;
   }
-  const k = keys[0];
+  const k = k0;
   if (k === "Escape") return "Esc";
   if (k === "?") return "?";
   return k.toUpperCase();

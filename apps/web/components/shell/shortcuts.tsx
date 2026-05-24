@@ -57,11 +57,12 @@ export function Shortcuts({ actions }: { actions: Actions }) {
           }
         } else {
           // Two-key shortcut: either ["mod", "x"] or ["g", "o"] sequence
-          const [a, b] = keys;
+          const a = keys[0] as string;
+          const b = keys[1] as string;
 
           if (a === "mod") {
             // Mod-key combo: e.g. ["mod", "k"] → Cmd/Ctrl + k
-            if (mod && k.toLowerCase() === (b as string).toLowerCase()) {
+            if (mod && k.toLowerCase() === b.toLowerCase()) {
               const fn = actionsRef.current[s.actionKey];
               if (fn) {
                 e.preventDefault();

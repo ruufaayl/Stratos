@@ -81,7 +81,7 @@ describe("buildSync", () => {
 
     const recentItems = results.filter((r) => r.category === "Recent");
     expect(recentItems.length).toBeGreaterThan(0);
-    expect(recentItems[0].label).toBe("Findings");
+    expect(recentItems[0]!.label).toBe("Findings");
   });
 
   it("role=owner → all actions including owner-only ones appear", () => {

@@ -37,7 +37,7 @@ describe("fetchResources / fetchFindings", () => {
       { signal: controller.signal },
     );
     expect(results).toHaveLength(1);
-    expect(results[0].label).toBe("idle-ec2");
+    expect(results[0]!.label).toBe("idle-ec2");
   });
 
   it("fetchFindings calls the correct URL and returns results", async () => {
@@ -56,7 +56,7 @@ describe("fetchResources / fetchFindings", () => {
       { signal: controller.signal },
     );
     expect(results).toHaveLength(1);
-    expect(results[0].label).toBe("High CPU idle");
+    expect(results[0]!.label).toBe("High CPU idle");
   });
 
   it("returns empty array on non-OK response", async () => {

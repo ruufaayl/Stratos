@@ -136,22 +136,21 @@ function buildRecentResults(
   const all = [...primaryNav, settingsNav];
   const navMap = new Map(all.map((item) => [navId(item.key), item]));
 
-  return recentIds
-    .slice(0, 5)
-    .map((id) => {
-      const item = navMap.get(id);
-      if (!item) return null;
-      const score = fuzzyScore(item.label, query);
-      if (score === 0 && query) return null;
-      return {
-        id,
-        category: "Recent" as const,
-        label: item.label,
-        href: item.href(orgSlug),
-        score: query ? score : 0.5,
-      };
-    })
-    .filter((r): r is CommandResult => r !== null);
+  const results: CommandResult[] = [];
+  for (const id of recentIds.slice(0, 5)) {
+    const item = navMap.get(id);
+    if (!item) continue;
+    const score = fuzzyScore(item.label, query);
+    if (score === 0 && query) continue;
+    results.push({
+      id,
+      category: "Recent",
+      label: item.label,
+      href: item.href(orgSlug),
+      score: query ? score : 0.5,
+    });
+  }
+  return results;
 }
 
 export function buildSync(args: {
