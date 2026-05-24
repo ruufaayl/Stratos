@@ -395,7 +395,12 @@ Waves: **P0** = ship before first paying customer · **P1** = ship before public
 
 | Route | Purpose | Engine | Wave |
 |---|---|---|---|
-| `/app/[org]` | Unified pulse + tabs (pulse/feed/map/forecast) | `/api/analyze?org=X` | P0 |
+| `/app/[org]` | Unified pulse + tabs (pulse/feed/map/forecast/impact) | `/api/analyze?org=X` | P0 |
+| `/app/[org]?tab=pulse` | Real-time waste pulse (default) | `/api/analyze?org=X` | P0 |
+| `/app/[org]?tab=feed` | Findings feed | `/api/findings?org=X&limit=20` | P0 |
+| `/app/[org]?tab=map` | Cost map (treemap) | `/api/analyze?org=X&view=map` | P0 |
+| `/app/[org]?tab=forecast` | Forecast cone | `/api/forecast?org=X` | P0 |
+| `/app/[org]?tab=impact` | Realized-savings tracker — cumulative $ from acked findings, week/month/quarter/YTD | `/api/impact?org=X&period=…` | **P1** |
 | `/app/[org]/aws` | AWS-only overview | `/api/analyze?org=X&cloud=aws` | P0 |
 | `/app/[org]/azure` | Azure-only overview | `/api/analyze?org=X&cloud=azure` | P1 |
 | `/app/[org]/gcp` | GCP-only overview | `/api/analyze?org=X&cloud=gcp` | P1 |
@@ -426,10 +431,11 @@ Subtotal: ~17 templates × 3 clouds for many of them. The IA collapses them to 1
 | `/app/[org]/findings?kind=commitment` | Filter view | same | P1 |
 | `/app/[org]/findings?kind=drift` | Filter view | same | P2 |
 | `/app/[org]/findings?kind=zombie` | Filter view | same | P1 |
-| `/app/[org]/findings/[id]` | Detail w/ tabs: Evidence / Math / Reasoning / History | `/api/findings/[id]` | P0 |
+| `/app/[org]/findings/[id]` | Detail w/ tabs: Evidence / Math / Reasoning / Resource / History | `/api/findings/[id]` | P0 |
 | `/app/[org]/findings/[id]?tab=evidence` | Telemetry charts that prove the finding | same | P0 |
 | `/app/[org]/findings/[id]?tab=math` | The literal algorithm walkthrough | same | P0 |
 | `/app/[org]/findings/[id]?tab=reasoning` | Claude's plain-English explanation | same | P0 |
+| `/app/[org]/findings/[id]?tab=resource` | Summary card + link to full resource page (bidirectional cross-link) | `/api/resources/[id]?summary=1` | P0 |
 | `/app/[org]/findings/[id]?tab=history` | Audit log: ack'd by, snoozed, fixed | same | P1 |
 | `/app/[org]/findings/saved` | User-saved filter views (smart lists) | local + `/api/saved-views` | P1 |
 | `/app/[org]/findings/archived` | Acknowledged / dismissed | `/api/findings?status=archived` | P1 |
@@ -466,8 +472,8 @@ Internal-only — designed last. ~10 routes, all P1/P2.
 | Marketing | 25 | ~40 (many static, no loading/empty) |
 | Auth | 8 | ~15 |
 | Org bootstrap | 3 | ~10 |
-| App — Overview / Cloud surfaces | 17 (× 3 clouds = 32 instances) | ~85 |
-| App — Findings | 14 | ~40 |
+| App — Overview / Cloud surfaces | 17 (× 3 clouds = 32 instances) + 5 overview tabs (pulse/feed/map/forecast/impact) | ~86 |
+| App — Findings | 14 + 1 detail tab (resource cross-link) | ~41 |
 | Forecast | 3 | ~12 |
 | Reports | 6 | ~24 |
 | Integrations | 12 | ~30 |
@@ -475,9 +481,9 @@ Internal-only — designed last. ~10 routes, all P1/P2.
 | Me (cross-org) | 5 | ~15 |
 | Admin | 10 | ~20 |
 | Error / utility | 4 | ~6 |
-| **Total** | **~120 routes** | **~340 designed states** |
+| **Total** | **~122 routes** | **~342 designed states** |
 
-The "200 screens" estimate was the right order of magnitude — and once we collapse cloud-parametric routes into shared designs, **~120 unique templates** carry the whole product.
+The "200 screens" estimate was the right order of magnitude — and once we collapse cloud-parametric routes into shared designs, **~122 unique templates** carry the whole product. (Updated after Addendum §16: +1 overview tab `?tab=impact` P1, +1 finding-detail tab `?tab=resource` P0.)
 
 ---
 
