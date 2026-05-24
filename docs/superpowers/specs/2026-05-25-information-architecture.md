@@ -151,7 +151,8 @@ APP (gated, scoped to org)
 │   ├── ?tab=pulse                   Real-time waste pulse (Zone A from current dashboard)
 │   ├── ?tab=feed                    Findings feed
 │   ├── ?tab=map                     Cost map (treemap)
-│   └── ?tab=forecast                Forecast cone
+│   ├── ?tab=forecast                Forecast cone
+│   └── ?tab=impact                  Realized savings tracker (P1 — cumulative $ from acked findings)
 │
 ├── /app/[org]/aws                   AWS overview
 ├── /app/[org]/azure                 Azure overview
@@ -163,10 +164,10 @@ APP (gated, scoped to org)
 ├── /app/[org]/{cloud}/regions/[regionId]           Detail
 ├── /app/[org]/{cloud}/services                     Breakdown
 ├── /app/[org]/{cloud}/services/{service}           Service-specific (ec2, rds, s3, ebs, eks, lambda, other)
-├── /app/[org]/{cloud}/resources/[resourceId]       Resource detail
+├── /app/[org]/{cloud}/resources/[resourceId]       Resource detail (tabbed: Overview | Findings | Utilization | History)
 │
 ├── /app/[org]/findings              All findings, filterable
-│   ├── /app/[org]/findings/[id]                    Detail (tabbed: Evidence | Math | Reasoning | History)
+│   ├── /app/[org]/findings/[id]                    Detail (tabbed: Evidence | Math | Reasoning | Resource | History)
 │   ├── /app/[org]/findings/saved                   Saved filter views
 │   └── /app/[org]/findings/archived
 │   (Filter by kind via ?kind=idle|rightsize|anomaly|commitment|drift|zombie)
@@ -589,3 +590,33 @@ This doc is consumed by:
 Each gets its own UI-spec doc and its own implementation plan.
 
 The **immediate next step** after this IA lands is sub-project C (app shell + nav skeleton). Every other app screen depends on it being in place.
+
+---
+
+## 16. Addendum — competitor IA research (2026-05-25)
+
+Source: `docs/superpowers/research/2026-05-25-ia-competitive-study.md` (1,257-line study of 17 products across direct CCM, node/pipeline AI tools, and best-in-class IA references).
+
+### 16.1 Headline answer: no visual node editor
+
+The user asked us to study ComfyUI, n8n, and other node/pipeline AI tools. The evidence is decisive: **no cost-management product uses a node editor, and none should.** Node editors serve users *constructing pipelines* (ML/data engineers). Stratos users *consume analysis results* (CTOs / VP Eng). Different job. Build cost is 3–6 weeks for a canvas primitive that delivers zero value to our audience. Re-evaluate only if enterprise demand surfaces for a custom cost-allocation rule editor — and even then, a list-based editor wins.
+
+### 16.2 Three changes applied inline
+
+| # | Change | Where in this spec | Priority |
+|---|---|---|---|
+| 1 | Add `?tab=impact` to `/app/[org]` overview — cumulative realized savings tracker | §5 sitemap | **P1** (needs weeks of data) |
+| 2 | Add `?tab=resource` to `/app/[org]/findings/[id]` — summary card linking to full resource page | §5 sitemap | **P0** (Wave 1 core flow) |
+| 3 | Add `?tab=findings` to `/app/[org]/{cloud}/resources/[resourceId]` — list of findings for this resource | §5 sitemap | **P0** (Wave 1 — must define now to avoid retrofit) |
+
+Changes 2 + 3 are the **same bidirectional cross-link** modeled from both directions. Without them, a user who lands on a finding cannot see the resource's full context (cost trend, config, other findings on this resource) without losing place. This is the single biggest IA gap in every competitor we studied (Vantage, Cloudability, Datadog CCM, Cast.ai) — and the cheapest one to close.
+
+### 16.3 Three patterns we explicitly reject
+
+- **No customizable sidebar.** New Relic / Datadog allow it because their surface is 50+ capabilities. We have 7. A customizable rail adds complexity without payoff. Exception: pinned shortcuts to saved views (Stripe pattern) — but the 7-item nav itself never changes.
+- **No per-service recommendation pages.** AWS / Densify split recommendations by service (EC2 tab, RDS tab, Lambda tab). This forces users into 6–8 pages. Our unified `/findings` + `?service=ec2` filter is strictly better. Service detail pages may show a *filtered* findings section, never their own data store.
+- **No "click to refresh."** AWS Cost Explorer and older CCM tools show stale data and ask users to manually refresh. Our SSE architecture supports streaming. Use it. A "Last analyzed: 2h ago" indicator + auto-stream is the contract. Manual "Re-analyze now" exists only for explicit deep scans after connecting a new account.
+
+### 16.4 Command-bar refinement
+
+Vantage's ⌘K indexes 29 navigable pages **plus every saved user object** (saved reports, saved filter views, dashboards, budgets). Our §6.3 listed generic categories without explicitly enumerating saved objects. Make the index explicit when building the command bar: routes + resources + findings + saved-views + saved-reports + actions + help, in that order of recency-weighted ranking.
