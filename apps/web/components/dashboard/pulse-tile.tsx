@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Sparkline } from "@/components/ui/sparkline";
+import type { SemanticKind } from "@/lib/design/tokens";
 import { cn, usd } from "@/lib/utils";
 
 interface PulseTileProps {
@@ -31,8 +32,8 @@ export function PulseTile({
         ? "text-good"
         : "text-bad";
 
-  const sparklineColor =
-    semantic === "good" ? "#10B981" : semantic === "bad" ? "#EF4444" : "#6366F1";
+  const sparklineKind: SemanticKind =
+    semantic === "good" ? "savings" : semantic === "bad" ? "waste" : "intelligence";
 
   return (
     <Card className="p-5">
@@ -46,11 +47,10 @@ export function PulseTile({
         {sparkline && sparkline.length > 1 && (
           <div className="text-fg-muted">
             <Sparkline
-              values={sparkline}
+              data={sparkline}
+              kind={sparklineKind}
               width={88}
               height={28}
-              stroke={sparklineColor}
-              fill={sparklineColor}
             />
           </div>
         )}
