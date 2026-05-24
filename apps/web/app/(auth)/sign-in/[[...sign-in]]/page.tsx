@@ -34,9 +34,7 @@ function EmailCodeVerification() {
         });
         if (result.status === "complete") {
           await setActive({ session: result.createdSessionId });
-          // TODO(Task 10): Replace with postAuthRedirectFor() once membership-aware
-          // redirect logic is implemented. For now hardcoded to /.
-          router.push("/");
+          router.push("/post-auth");
         } else {
           setError("Verification incomplete. Please try again.");
         }
@@ -82,8 +80,7 @@ function TotpVerification() {
         });
         if (result.status === "complete") {
           await setActive({ session: result.createdSessionId });
-          // TODO(Task 10): Replace with postAuthRedirectFor()
-          router.push("/");
+          router.push("/post-auth");
         } else {
           setError("Verification incomplete. Please try again.");
         }

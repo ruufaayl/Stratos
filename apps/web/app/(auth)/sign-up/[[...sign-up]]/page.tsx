@@ -34,9 +34,7 @@ function EmailVerificationStep() {
         });
         if (result.status === "complete") {
           await setActive({ session: result.createdSessionId });
-          // TODO(Task 10): Replace with postAuthRedirectFor() once membership-aware
-          // redirect logic is implemented. For now hardcoded to /orgs/create.
-          router.push("/orgs/create");
+          router.push("/post-auth");
         } else {
           setError("Verification incomplete. Please try again.");
         }
