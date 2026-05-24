@@ -15,7 +15,6 @@ describe("Button", () => {
     render(<Button onClick={onClick}>Go</Button>);
     const btn = screen.getByRole("button", { name: "Go" });
     await user.click(btn);
-    btn.focus();
     await user.keyboard("{Enter}");
     await user.keyboard(" ");
     expect(onClick).toHaveBeenCalledTimes(3);
