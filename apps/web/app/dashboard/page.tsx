@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import { eq, desc } from "drizzle-orm";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { db, schema } from "@/lib/db";
 import { usd } from "@/lib/utils";
 
@@ -69,7 +69,7 @@ export default async function DashboardPage() {
             <CardHeader>
               <CardTitle>Connect your first account</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardBody className="space-y-3">
               <p className="text-fg-muted">
                 AWS connection is read-only — Stratos describes your resources
                 and pulls CloudWatch metrics, never writes to your account.
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
                   see the engine on public data →
                 </Link>
               </div>
-            </CardContent>
+            </CardBody>
           </Card>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -97,7 +97,7 @@ export default async function DashboardPage() {
               <CardHeader>
                 <CardTitle>Accounts</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardBody>
                 <ul className="space-y-2 text-sm">
                   {userAccounts.map((a) => (
                     <li
@@ -111,14 +111,14 @@ export default async function DashboardPage() {
                     </li>
                   ))}
                 </ul>
-              </CardContent>
+              </CardBody>
             </Card>
 
             <Card>
               <CardHeader>
                 <CardTitle>Recent runs</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardBody>
                 {recentRuns.length === 0 ? (
                   <div className="text-fg-muted text-sm">No runs yet.</div>
                 ) : (
@@ -140,7 +140,7 @@ export default async function DashboardPage() {
                     ))}
                   </ul>
                 )}
-              </CardContent>
+              </CardBody>
             </Card>
           </div>
         )}

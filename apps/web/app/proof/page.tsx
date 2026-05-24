@@ -7,7 +7,7 @@ import { PulseStrip } from "@/components/dashboard/pulse-strip";
 import { ForecastCone } from "@/components/dashboard/forecast-cone";
 import { LiveScanTicker } from "@/components/dashboard/live-scan-ticker";
 import { ProofModeToggle } from "@/components/dashboard/proof-mode-toggle";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchSyntheticProof } from "@/lib/engine/proof";
 import { loadRealProof } from "@/lib/engine/real-proof";
 import { usd } from "@/lib/utils";
@@ -153,7 +153,7 @@ async function RealProofView({ data }: { data: NonNullable<Awaited<ReturnType<ty
             <CardHeader>
               <CardTitle>How the engine sees it</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-fg-muted">
+            <CardBody className="space-y-3 text-sm text-fg-muted">
               {Object.entries(data.opportunity_count_by_kind).map(([kind, count]) => (
                 <div key={kind} className="flex justify-between border-b border-border pb-2 last:border-0">
                   <span className="capitalize text-fg">{kind}</span>
@@ -165,14 +165,14 @@ async function RealProofView({ data }: { data: NonNullable<Awaited<ReturnType<ty
               <p className="text-xs font-mono text-fg-subtle pt-2 border-t border-border">
                 Generated {new Date(data.generated_at).toUTCString()}
               </p>
-            </CardContent>
+            </CardBody>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle>Reproducibility</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-fg-muted">
+            <CardBody className="space-y-3 text-sm text-fg-muted">
               <p>
                 These numbers are deterministic. Re-run the proof harness
                 against{" "}
@@ -193,14 +193,14 @@ async function RealProofView({ data }: { data: NonNullable<Awaited<ReturnType<ty
                 <br />
                 Code: <span className="text-fg">proof/loaders/azure_v2.py</span>
               </p>
-            </CardContent>
+            </CardBody>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle>Want this on your real account?</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-fg-muted">
+            <CardBody className="space-y-3 text-sm text-fg-muted">
               <p>
                 Read-only IAM. Under 10 minutes to connect. Stratos describes
                 your resources and pulls CloudWatch metrics — never writes.
@@ -211,7 +211,7 @@ async function RealProofView({ data }: { data: NonNullable<Awaited<ReturnType<ty
               >
                 See pricing →
               </Link>
-            </CardContent>
+            </CardBody>
           </Card>
         </section>
       </div>
@@ -333,7 +333,7 @@ async function SyntheticProofView() {
             <CardHeader>
               <CardTitle>Cost map</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardBody>
               <CostMap nodes={data.cost_map} />
               <div className="mt-3 flex items-center justify-between text-xs font-mono text-fg-subtle">
                 <span>area = monthly cost</span>
@@ -343,14 +343,14 @@ async function SyntheticProofView() {
                   <span className="size-2 rounded-sm bg-bad ml-2" /> wasteful
                 </span>
               </div>
-            </CardContent>
+            </CardBody>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle>Spend forecast (90 days)</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardBody>
               <ForecastCone
                 history={data.daily_cost_series}
                 forecast={data.forecast.forecast}
@@ -379,7 +379,7 @@ async function SyntheticProofView() {
               <div className="mt-4 text-fg-subtle text-xs font-mono">
                 Confidence band widens with √t (uncertainty compounds).
               </div>
-            </CardContent>
+            </CardBody>
           </Card>
         </section>
       </div>
