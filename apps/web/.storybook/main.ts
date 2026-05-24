@@ -16,6 +16,9 @@ const config: StorybookConfig = {
     config.resolve.alias = {
       ...(config.resolve.alias as Record<string, string> | undefined),
       "@": path.resolve(__dirname, ".."),
+      // Mock Next.js navigation and Clerk so shell stories render without a real Next.js router or Clerk backend
+      "next/navigation": path.resolve(__dirname, "mocks/next-navigation.ts"),
+      "@clerk/nextjs": path.resolve(__dirname, "mocks/clerk-nextjs.ts"),
     };
     return config;
   },
