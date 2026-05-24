@@ -140,7 +140,7 @@ export function ConnectWizard({ externalId, stratosPrincipal }: ConnectWizardPro
           <h2 className="text-lg font-medium text-text-primary">Name your account</h2>
           <p className="text-text-muted text-sm">
             Give this connection a memorable name — usually your AWS account alias
-            or environment (e.g., "acme-prod", "staging").
+            or environment (e.g., &quot;acme-prod&quot;, &quot;staging&quot;).
           </p>
           <div className="space-y-2">
             <label className="text-sm text-text-muted font-mono">Account name</label>

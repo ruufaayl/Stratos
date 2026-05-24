@@ -13,7 +13,7 @@ export const Confirm: Story = {
       <ModalContent>
         <ModalTitle>Delete this account?</ModalTitle>
         <ModalDescription>
-          We'll stop scanning and purge historical findings after 30 days. This can't be undone.
+          We&apos;ll stop scanning and purge historical findings after 30 days. This can&apos;t be undone.
         </ModalDescription>
         <div style={{ display: "flex", gap: 8, marginTop: 24, justifyContent: "flex-end" }}>
           <Modal.Close asChild><Button intent="ghost">Cancel</Button></Modal.Close>
