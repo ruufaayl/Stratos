@@ -1,4 +1,25 @@
-export default function OrgRoot() {
+import { redirect } from "next/navigation";
+import { auth } from "@clerk/nextjs/server";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/lib/db";
+
+export default async function OrgRoot({
+  params,
+}: {
+  params: { org: string };
+}) {
+  const { orgId } = await auth();
+  if (!orgId) redirect(`/sign-in?return_to=/app/${params.org}`);
+
+  const accounts = await db
+    .select({ id: schema.accounts.id })
+    .from(schema.accounts)
+    .where(eq(schema.accounts.orgId, orgId))
+    .limit(1);
+
+  // No connected accounts yet — send to the welcome wizard
+  if (accounts.length === 0) redirect(`/app/${params.org}/welcome`);
+
   return (
     <div className="p-8">
       <div className="text-text-faint text-mono-sm font-mono mb-2">
