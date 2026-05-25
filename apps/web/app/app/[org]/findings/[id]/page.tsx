@@ -13,6 +13,7 @@ import { MathTab } from "@/components/findings/math-tab";
 import { ReasoningTab } from "@/components/findings/reasoning-tab";
 import { ResourceTab } from "@/components/findings/resource-tab";
 import { Chip } from "@/components/ui/chip";
+import { FindingActions } from "@/components/findings/finding-actions";
 import { usd } from "@/lib/utils";
 
 const VALID_DETAIL_TABS: readonly DetailTabId[] = [
@@ -119,9 +120,15 @@ export default async function FindingDetailPage({
       <div className="text-xl font-semibold text-text-primary mb-1">
         {finding.resourceId ?? "—"}
       </div>
-      <div className="text-savings-500 font-semibold tabular-nums mb-6">
+      <div className="text-savings-500 font-semibold tabular-nums mb-4">
         {usd(Number(finding.monthlySavings))}/mo potential savings
       </div>
+
+      <FindingActions
+        findingId={params.id}
+        isApplied={finding.appliedAt !== null}
+        isDismissed={finding.dismissedAt !== null}
+      />
 
       {/* Tab bar */}
       <FindingDetailTabBar
