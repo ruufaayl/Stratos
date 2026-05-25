@@ -28,10 +28,25 @@ export const accounts = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     clerkUserId: text("clerk_user_id").notNull(),
+    // Clerk organisation ID — all new accounts are org-scoped.
+    // Legacy rows that pre-date orgs carry a sentinel value of 'legacy-orphan'.
+    orgId: text("org_id").notNull().default("legacy-orphan"),
     // Display name (e.g., "acme-prod", "azure-public-demo")
     name: text("name").notNull(),
     // "aws" | "azure" | "gcp" | "demo"
     provider: text("provider").notNull(),
+    // AWS IAM cross-account role ARN (set for AWS provider accounts)
+    roleArn: text("role_arn"),
+    // Per-org deterministic external ID for confused-deputy protection
+    externalId: text("external_id"),
+    // Primary AWS region for this account
+    region: text("region").notNull().default("us-east-1"),
+    // AWS account ID discovered via STS GetCallerIdentity
+    awsAccountId: text("aws_account_id"),
+    // "pending" | "validated" | "failed"
+    status: text("status").notNull().default("pending"),
+    // Timestamp of last successful engine scan
+    lastScanAt: timestamp("last_scan_at"),
     // Free-form metadata (AWS account id, region defaults, etc.)
     config: jsonb("config").$type<Record<string, unknown>>().default({}),
     // "free" | "pro" — written exclusively by the Stripe webhook, never the UI.
@@ -42,6 +57,7 @@ export const accounts = pgTable(
   },
   (t) => ({
     clerkUserIdx: index("accounts_clerk_user_idx").on(t.clerkUserId),
+    orgIdx: index("accounts_org_idx").on(t.orgId),
   }),
 );
 
