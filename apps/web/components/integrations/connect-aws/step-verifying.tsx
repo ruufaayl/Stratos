@@ -13,42 +13,60 @@ type Props = {
   orgSlug: string;
   /**
    * When true (set by Storybook stories via ConnectAwsWizard's initialState
-   * prop), the useEffect that fires POST /api/accounts is skipped. This
-   * prevents network noise / 404s in Storybook while still rendering the
-   * correct visual state driven by `state`.
+   * prop), the useEffects that fire API calls are skipped. This prevents
+   * network noise / 404s in Storybook while still rendering the correct visual
+   * state driven by `state`.
    */
   skipEffect?: boolean;
 };
 
-type VerifyPhase = "assuming" | "identity" | "regions" | "persisting";
+type VerifyPhase =
+  | "assuming"
+  | "identity"
+  | "regions"
+  | "persisting"
+  | "listing"
+  | "fetching"
+  | "analyzing";
 
-const PHASES: VerifyPhase[] = ["assuming", "identity", "regions", "persisting"];
+const PHASES: VerifyPhase[] = [
+  "assuming",
+  "identity",
+  "regions",
+  "persisting",
+  "listing",
+  "fetching",
+  "analyzing",
+];
 
 const PHASE_LABELS: Record<VerifyPhase, string> = {
   assuming: "Assuming role",
   identity: "Verifying identity",
   regions: "Discovering regions",
   persisting: "Saving connection",
+  listing: "Discovering EC2 instances",
+  fetching: "Fetching metrics",
+  analyzing: "Analyzing for waste",
 };
+
+/** Phase index where scan animation begins. */
+const SCAN_PHASE_START = PHASES.indexOf("listing"); // 4
 
 export function StepVerifying({ state, dispatch, orgSlug, skipEffect }: Props) {
   const router = useRouter();
   const [currentPhaseIdx, setCurrentPhaseIdx] = React.useState(-1);
 
+  // Phase 1: account creation (assuming → persisting)
   React.useEffect(() => {
-    // When rendered from Storybook stories (skipEffect=true), skip the fetch
-    // and animation loop so no network calls fire and the story renders the
-    // static visual state from `state`.
     if (skipEffect) return;
 
-    // Kick off phase animation
     dispatch({ type: "PHASE", phase: "assuming" });
     setCurrentPhaseIdx(0);
 
     let idx = 0;
     const interval = setInterval(() => {
       idx += 1;
-      if (idx < PHASES.length) {
+      if (idx < SCAN_PHASE_START) {
         setCurrentPhaseIdx(idx);
         dispatch({ type: "PHASE", phase: PHASES[idx] as Phase });
       } else {
@@ -56,7 +74,6 @@ export function StepVerifying({ state, dispatch, orgSlug, skipEffect }: Props) {
       }
     }, 400);
 
-    // Fire API call in parallel — externalId is now derived server-side
     fetch("/api/accounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -69,6 +86,7 @@ export function StepVerifying({ state, dispatch, orgSlug, skipEffect }: Props) {
       .then(async (res) => {
         const data = await res.json();
         if (res.ok && data.account) {
+          setCurrentPhaseIdx(SCAN_PHASE_START);
           dispatch({
             type: "SUCCESS",
             accountId: data.account.id,
@@ -86,7 +104,56 @@ export function StepVerifying({ state, dispatch, orgSlug, skipEffect }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Redirect on success (skipped in Storybook via skipEffect)
+  // Phase 2: scan (listing → fetching → analyzing)
+  // Fires when SUCCESS dispatched accountId and phase transitions to "listing".
+  React.useEffect(() => {
+    if (skipEffect) return;
+    if (state.phase !== "listing" || !state.accountId) return;
+
+    const SCAN_ANIM: ("fetching" | "analyzing")[] = ["fetching", "analyzing"];
+    let scanIdx = 0;
+    const scanInterval = setInterval(() => {
+      if (scanIdx < SCAN_ANIM.length) {
+        const ph = SCAN_ANIM[scanIdx]!;
+        setCurrentPhaseIdx(SCAN_PHASE_START + scanIdx + 1);
+        dispatch({ type: "PHASE", phase: ph });
+        scanIdx += 1;
+      }
+    }, 2000);
+
+    fetch("/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: state.accountId }),
+    })
+      .then(async (res) => {
+        clearInterval(scanInterval);
+        const data = await res.json();
+        if (res.ok) {
+          setCurrentPhaseIdx(PHASES.length);
+          dispatch({
+            type: "SCAN_SUCCESS",
+            runId: data.runId as string,
+            totalFindings: data.totalFindings as number,
+            totalSavingsCents: data.totalSavingsCents as number,
+          });
+        } else {
+          dispatch({
+            type: "SCAN_ERROR",
+            message: (data.error as string | undefined) ?? "Scan failed",
+          });
+        }
+      })
+      .catch(() => {
+        clearInterval(scanInterval);
+        dispatch({ type: "SCAN_ERROR", message: "Scan failed — could not reach server" });
+      });
+
+    return () => clearInterval(scanInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.phase, state.accountId]);
+
+  // Redirect to org overview when done
   React.useEffect(() => {
     if (skipEffect) return;
     if (state.phase === "done") {
@@ -174,6 +241,16 @@ export function StepVerifying({ state, dispatch, orgSlug, skipEffect }: Props) {
               <p className="text-sm text-text-primary font-medium">
                 Connected to AWS account {state.awsAccountId}
               </p>
+              {state.scanResult && state.scanResult.totalFindings > 0 && (
+                <p className="text-xs text-savings-500">
+                  Found {state.scanResult.totalFindings} optimization
+                  {state.scanResult.totalFindings !== 1 ? "s" : ""} ·{" "}
+                  ${Math.round(state.scanResult.totalSavingsCents / 100).toLocaleString()}/mo potential savings
+                </p>
+              )}
+              {state.scanResult && state.scanResult.totalFindings === 0 && (
+                <p className="text-xs text-text-muted">No waste found yet — check back after 24h of data</p>
+              )}
               <p className="text-xs text-text-muted">Redirecting…</p>
             </div>
           )}
@@ -181,7 +258,11 @@ export function StepVerifying({ state, dispatch, orgSlug, skipEffect }: Props) {
           {/* In-progress label */}
           {!isError && !isDone && (
             <p className="text-xs text-text-muted">
-              {currentPhaseIdx >= PHASES.length - 1 ? "Almost done…" : "Connecting…"}
+              {currentPhaseIdx >= SCAN_PHASE_START
+                ? "Scanning for waste…"
+                : currentPhaseIdx >= SCAN_PHASE_START - 1
+                  ? "Almost done…"
+                  : "Connecting…"}
             </p>
           )}
         </div>

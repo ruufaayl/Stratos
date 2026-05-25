@@ -50,7 +50,7 @@ describe("ConnectAwsWizard reducer", () => {
     expect(state.step).toBe(3);
   });
 
-  it("6. from step=4 with phase=persisting + SUCCESS → fields populated, phase=done", () => {
+  it("6. from step=4 with phase=persisting + SUCCESS → fields populated, phase=listing (scan starts)", () => {
     const step4: WizardState = {
       ...initialState,
       step: 4,
@@ -61,8 +61,51 @@ describe("ConnectAwsWizard reducer", () => {
       accountId: "acc_123",
       awsAccountId: "123456789012",
     });
-    expect(state.phase).toBe("done");
+    expect(state.phase).toBe("listing");
     expect(state.accountId).toBe("acc_123");
     expect(state.awsAccountId).toBe("123456789012");
+  });
+
+  it("7. SCAN_SUCCESS from phase=listing → phase=done with scanResult", () => {
+    const scanning: WizardState = {
+      ...initialState,
+      step: 4,
+      phase: "listing",
+      accountId: "acc_123",
+    };
+    const state = reducer(scanning, {
+      type: "SCAN_SUCCESS",
+      runId: "run-1",
+      totalFindings: 3,
+      totalSavingsCents: 50000,
+    });
+    expect(state.phase).toBe("done");
+    expect(state.scanResult).toEqual({ runId: "run-1", totalFindings: 3, totalSavingsCents: 50000 });
+  });
+
+  it("8. SCAN_ERROR from scan phase → phase=error with message", () => {
+    const scanning: WizardState = {
+      ...initialState,
+      step: 4,
+      phase: "analyzing",
+      accountId: "acc_123",
+    };
+    const state = reducer(scanning, {
+      type: "SCAN_ERROR",
+      message: "engine unreachable",
+    });
+    expect(state.phase).toBe("error");
+    expect(state.errorMessage).toBe("engine unreachable");
+  });
+
+  it("9. SCAN_SUCCESS ignored when not in a scan phase", () => {
+    const notScanning: WizardState = { ...initialState, step: 4, phase: "persisting" };
+    const state = reducer(notScanning, {
+      type: "SCAN_SUCCESS",
+      runId: "run-1",
+      totalFindings: 1,
+      totalSavingsCents: 1000,
+    });
+    expect(state.phase).toBe("persisting");
   });
 });

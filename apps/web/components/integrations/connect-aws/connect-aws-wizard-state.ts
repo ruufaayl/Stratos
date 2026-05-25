@@ -6,8 +6,17 @@ export type Phase =
   | "identity"
   | "regions"
   | "persisting"
+  | "listing"    // scan: discovering EC2 instances
+  | "fetching"   // scan: pulling CloudWatch metrics
+  | "analyzing"  // scan: engine running
   | "done"
   | "error";
+
+export type ScanResult = {
+  runId: string;
+  totalFindings: number;
+  totalSavingsCents: number;
+};
 
 export type WizardState = {
   step: 1 | 2 | 3 | 4;
@@ -15,10 +24,12 @@ export type WizardState = {
   roleArn: string;
   region: string;
   phase: Phase;
-  /** Populated on SUCCESS */
+  /** Populated on account creation SUCCESS */
   accountId: string;
   awsAccountId: string;
   errorMessage: string;
+  /** Populated on SCAN_SUCCESS */
+  scanResult?: ScanResult;
 };
 
 export const initialState: WizardState = {
@@ -42,7 +53,9 @@ export type Action =
   | { type: "PREV_STEP" }
   | { type: "GOTO_STEP"; step: 1 | 2 | 3 | 4 }
   | { type: "PHASE"; phase: Phase }
-  | { type: "SUCCESS"; accountId: string; awsAccountId: string };
+  | { type: "SUCCESS"; accountId: string; awsAccountId: string }
+  | { type: "SCAN_SUCCESS"; runId: string; totalFindings: number; totalSavingsCents: number }
+  | { type: "SCAN_ERROR"; message: string };
 
 export function reducer(state: WizardState, action: Action): WizardState {
   switch (action.type) {
@@ -82,12 +95,33 @@ export function reducer(state: WizardState, action: Action): WizardState {
     case "SUCCESS": {
       // SUCCESS only allowed when phase === "persisting"
       if (state.phase !== "persisting") return state;
+      // Transitions to "listing" (not "done") — scan begins next
       return {
         ...state,
-        phase: "done",
+        phase: "listing",
         accountId: action.accountId,
         awsAccountId: action.awsAccountId,
       };
+    }
+
+    case "SCAN_SUCCESS": {
+      // Only valid during a scan phase
+      if (!["listing", "fetching", "analyzing"].includes(state.phase)) return state;
+      return {
+        ...state,
+        phase: "done",
+        scanResult: {
+          runId: action.runId,
+          totalFindings: action.totalFindings,
+          totalSavingsCents: action.totalSavingsCents,
+        },
+      };
+    }
+
+    case "SCAN_ERROR": {
+      // Only valid during a scan phase
+      if (!["listing", "fetching", "analyzing"].includes(state.phase)) return state;
+      return { ...state, phase: "error", errorMessage: action.message };
     }
 
     default:
