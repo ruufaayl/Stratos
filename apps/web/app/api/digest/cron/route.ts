@@ -11,6 +11,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { db, schema } from "@/lib/db";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic"; // prevent static prerender at build time
 export const maxDuration = 300; // 5 min budget for large user lists
 
 export async function GET(req: Request) {

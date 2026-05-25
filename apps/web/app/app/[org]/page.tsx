@@ -34,7 +34,7 @@ function ScanQueuedView({
         {accounts.length === 1
           ? "your AWS account"
           : `your ${accounts.length} AWS accounts`}
-        . The engine will analyze your resources shortly. You'll see findings
+        . The engine will analyze your resources shortly. You&apos;ll see findings
         here when the first scan completes.
       </p>
       <div className="grid gap-3">
