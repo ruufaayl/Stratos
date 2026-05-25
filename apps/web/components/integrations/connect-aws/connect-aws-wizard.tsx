@@ -41,6 +41,7 @@ export function ConnectAwsWizard({
           state={state}
           dispatch={dispatch}
           orgSlug={orgSlug}
+          skipEffect={init !== undefined}
         />
       )}
     </div>

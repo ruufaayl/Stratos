@@ -11,6 +11,13 @@ type Props = {
   state: WizardState;
   dispatch: React.Dispatch<Action>;
   orgSlug: string;
+  /**
+   * When true (set by Storybook stories via ConnectAwsWizard's initialState
+   * prop), the useEffect that fires POST /api/accounts is skipped. This
+   * prevents network noise / 404s in Storybook while still rendering the
+   * correct visual state driven by `state`.
+   */
+  skipEffect?: boolean;
 };
 
 type VerifyPhase = "assuming" | "identity" | "regions" | "persisting";
@@ -24,11 +31,16 @@ const PHASE_LABELS: Record<VerifyPhase, string> = {
   persisting: "Saving connection",
 };
 
-export function StepVerifying({ state, dispatch, orgSlug }: Props) {
+export function StepVerifying({ state, dispatch, orgSlug, skipEffect }: Props) {
   const router = useRouter();
   const [currentPhaseIdx, setCurrentPhaseIdx] = React.useState(-1);
 
   React.useEffect(() => {
+    // When rendered from Storybook stories (skipEffect=true), skip the fetch
+    // and animation loop so no network calls fire and the story renders the
+    // static visual state from `state`.
+    if (skipEffect) return;
+
     // Kick off phase animation
     dispatch({ type: "PHASE", phase: "assuming" });
     setCurrentPhaseIdx(0);
@@ -74,15 +86,16 @@ export function StepVerifying({ state, dispatch, orgSlug }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Redirect on success
+  // Redirect on success (skipped in Storybook via skipEffect)
   React.useEffect(() => {
+    if (skipEffect) return;
     if (state.phase === "done") {
       const timeout = setTimeout(() => {
         router.push(`/app/${orgSlug}`);
       }, 1500);
       return () => clearTimeout(timeout);
     }
-  }, [state.phase, orgSlug, router]);
+  }, [state.phase, orgSlug, router, skipEffect]);
 
   const isError = state.phase === "error";
   const isDone = state.phase === "done";
