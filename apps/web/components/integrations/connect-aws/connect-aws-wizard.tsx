@@ -41,7 +41,6 @@ export function ConnectAwsWizard({
           state={state}
           dispatch={dispatch}
           orgSlug={orgSlug}
-          externalId={externalId}
         />
       )}
     </div>

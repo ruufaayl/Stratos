@@ -11,8 +11,6 @@ type Props = {
   state: WizardState;
   dispatch: React.Dispatch<Action>;
   orgSlug: string;
-  /** Pass externalId down — TODO: remove when Task 11 updates route to derive it server-side */
-  externalId: string;
 };
 
 type VerifyPhase = "assuming" | "identity" | "regions" | "persisting";
@@ -26,7 +24,7 @@ const PHASE_LABELS: Record<VerifyPhase, string> = {
   persisting: "Saving connection",
 };
 
-export function StepVerifying({ state, dispatch, orgSlug, externalId }: Props) {
+export function StepVerifying({ state, dispatch, orgSlug }: Props) {
   const router = useRouter();
   const [currentPhaseIdx, setCurrentPhaseIdx] = React.useState(-1);
 
@@ -46,15 +44,13 @@ export function StepVerifying({ state, dispatch, orgSlug, externalId }: Props) {
       }
     }, 400);
 
-    // Fire API call in parallel
-    // TODO: remove externalId from body when Task 11 updates route to derive it server-side
+    // Fire API call in parallel — externalId is now derived server-side
     fetch("/api/accounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: state.name,
         roleArn: state.roleArn,
-        externalId,
         region: state.region,
       }),
     })

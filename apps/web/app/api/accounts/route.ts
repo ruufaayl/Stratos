@@ -1,13 +1,14 @@
 /**
  * POST /api/accounts
- * Creates a new AWS account connection for the signed-in user.
+ * Creates a new AWS account connection for the active organisation.
  *
- * 1. Validates the IAM role (read-only, cross-account, external ID).
- * 2. Persists the account row to Postgres.
- * 3. Kicks off the first analysis run immediately.
+ * 1. Auth gate — must be signed in with an active org.
+ * 2. Admin gate — only org owners and admins can connect accounts.
+ * 3. Validates the IAM role (read-only, cross-account, org-scoped external ID).
+ * 4. Persists the account row to Postgres.
  *
  * GET /api/accounts
- * Returns all accounts belonging to the signed-in user.
+ * Returns all accounts belonging to the active organisation.
  */
 
 import { NextResponse } from "next/server";
@@ -16,7 +17,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db, schema } from "@/lib/db";
-import { validateAwsRole, generateExternalId } from "@/lib/aws/connect";
+import { validateAwsRole } from "@/lib/aws/connect";
+import { externalIdForOrg } from "@/lib/aws/external-id";
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -24,13 +26,10 @@ import { validateAwsRole, generateExternalId } from "@/lib/aws/connect";
 
 const CreateAccountSchema = z.object({
   name: z.string().min(1).max(64),
-  roleArn: z
-    .string()
-    .regex(
-      /^arn:aws:iam::\d{12}:role\/[\w+=,.@-]+$/,
-      "Invalid IAM role ARN format",
-    ),
-  externalId: z.string().min(8),
+  roleArn: z.string().regex(
+    /^arn:aws:iam::\d{12}:role\/[\w+=,.@-]+$/,
+    "Invalid IAM role ARN format",
+  ),
   region: z.string().default("us-east-1"),
 });
 
@@ -39,15 +38,18 @@ const CreateAccountSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export async function GET() {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+  if (!orgId) {
+    return NextResponse.json({ error: "Active organization required." }, { status: 400 });
   }
 
   const accounts = await db
     .select()
     .from(schema.accounts)
-    .where(eq(schema.accounts.clerkUserId, userId));
+    .where(eq(schema.accounts.orgId, orgId));
 
   return NextResponse.json({ accounts });
 }
@@ -57,9 +59,19 @@ export async function GET() {
 // ---------------------------------------------------------------------------
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
+  const { userId, orgId, orgRole } = await auth();
+
   if (!userId) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+  if (!orgId) {
+    return NextResponse.json({ error: "Active organization required." }, { status: 400 });
+  }
+
+  // Admin gate: only owners and admins may connect accounts
+  const role = orgRole?.replace("org:", "") ?? "member";
+  if (role !== "owner" && role !== "admin") {
+    return NextResponse.json({ error: "Admin role required." }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);
@@ -71,39 +83,45 @@ export async function POST(req: Request) {
     );
   }
 
-  const { name, roleArn, externalId, region } = parsed.data;
+  const { name, roleArn, region } = parsed.data;
+
+  // Derive the org-scoped external ID server-side (confused-deputy protection)
+  const externalId = externalIdForOrg(orgId);
 
   // Validate the IAM role before persisting anything
   const validation = await validateAwsRole(roleArn, externalId);
   if (!validation.ok) {
-    return NextResponse.json(
-      { error: validation.error },
-      { status: 422 },
-    );
+    return NextResponse.json({ error: validation.error }, { status: 422 });
   }
 
-  // Persist account
-  const [account] = await db
+  // Persist account using dedicated columns (not the config jsonb blob)
+  const rows = await db
     .insert(schema.accounts)
     .values({
+      orgId,
       clerkUserId: userId,
       name,
       provider: "aws",
-      config: {
-        roleArn,
-        externalId,
-        region,
-        awsAccountId: validation.accountId,
-      },
+      roleArn,
+      externalId,
+      region,
+      awsAccountId: validation.accountId,
+      status: "validated",
     })
     .returning();
 
-  return NextResponse.json(
-    {
-      account,
-      awsAccountId: validation.accountId,
-      message: `Connected! AWS account ${validation.accountId} linked as "${name}".`,
+  const account = rows[0];
+  if (!account) {
+    return NextResponse.json({ error: "Failed to persist account." }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    account: {
+      id: account.id,
+      awsAccountId: account.awsAccountId,
+      name: account.name,
+      region: account.region,
+      status: account.status,
     },
-    { status: 201 },
-  );
+  });
 }
