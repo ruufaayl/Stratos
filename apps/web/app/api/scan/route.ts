@@ -51,6 +51,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
+  if (!account.roleArn || !account.externalId) {
+    return NextResponse.json(
+      { error: "Account is not fully configured (missing IAM role)" },
+      { status: 422 },
+    );
+  }
+
   const result = await runScan({
     id: account.id,
     orgId: account.orgId,
