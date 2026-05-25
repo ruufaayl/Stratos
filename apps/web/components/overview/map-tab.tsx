@@ -14,9 +14,9 @@ interface MapTabProps {
  */
 export function MapTab({ findings }: MapTabProps) {
   const nodes = findings
-    .filter((f) => f.resourceId !== null)
+    .filter((f): f is typeof f & { resourceId: string } => f.resourceId !== null)
     .map((f) => ({
-      id: f.resourceId!,
+      id: f.resourceId,
       monthly_cost: Number(f.monthlySavings),
       waste_intensity: f.risk !== null ? Number(f.risk) : 0.5,
     }));
