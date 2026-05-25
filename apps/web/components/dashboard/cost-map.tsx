@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { hierarchy, treemap, treemapSquarify } from "d3-hierarchy";
 import { scaleLinear } from "d3-scale";
 
@@ -10,6 +11,8 @@ interface CostMapNode {
   monthly_cost: number;
   /** 0..1 — 0 = perfectly efficient, 1 = entirely wasted. */
   waste_intensity: number;
+  /** Optional navigation target — when set, clicking the cell navigates here. */
+  href?: string;
 }
 
 interface CostMapProps {
@@ -23,6 +26,8 @@ interface CostMapProps {
  * spend; color goes emerald → amber → red with waste intensity. ENGINE.md §8.
  */
 export function CostMap({ nodes, width = 480, height = 360 }: CostMapProps) {
+  const router = useRouter();
+
   if (nodes.length === 0) {
     return (
       <div className="h-[360px] flex items-center justify-center text-text-muted text-sm">
@@ -66,7 +71,12 @@ export function CostMap({ nodes, width = 480, height = 360 }: CostMapProps) {
         // Only label rectangles big enough to read.
         const labelable = w > 64 && h > 28;
         return (
-          <g key={d.id} transform={`translate(${leaf.x0},${leaf.y0})`}>
+          <g
+            key={d.id}
+            transform={`translate(${leaf.x0},${leaf.y0})`}
+            onClick={() => d.href && router.push(d.href)}
+            style={{ cursor: d.href ? "pointer" : undefined }}
+          >
             <rect
               width={w}
               height={h}

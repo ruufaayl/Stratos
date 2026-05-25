@@ -4,6 +4,7 @@ import type { Opportunity as DbFinding } from "@/lib/db/schema";
 
 interface MapTabProps {
   findings: DbFinding[];
+  orgSlug: string;
 }
 
 /**
@@ -12,13 +13,14 @@ interface MapTabProps {
  *   - area (monthly_cost) = monthlySavings (the waste, not total spend)
  *   - color (waste_intensity) = risk score
  */
-export function MapTab({ findings }: MapTabProps) {
+export function MapTab({ findings, orgSlug }: MapTabProps) {
   const nodes = findings
     .filter((f): f is typeof f & { resourceId: string } => f.resourceId !== null)
     .map((f) => ({
       id: f.resourceId,
       monthly_cost: Number(f.monthlySavings),
       waste_intensity: f.risk !== null ? Number(f.risk) : 0.5,
+      href: `/app/${orgSlug}/findings/${f.id}`,
     }));
 
   if (nodes.length === 0) {

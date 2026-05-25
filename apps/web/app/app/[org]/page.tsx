@@ -11,6 +11,7 @@ import { MapTab } from "@/components/overview/map-tab";
 import { ForecastTab } from "@/components/overview/forecast-tab";
 import { OverviewSkeleton } from "@/components/overview/overview-skeleton";
 import { Empty } from "@/components/ui/empty";
+import { RescanButton } from "@/components/overview/rescan-button";
 
 const VALID_TABS = ["pulse", "feed", "map", "forecast"] as const satisfies readonly TabId[];
 
@@ -36,6 +37,8 @@ async function OverviewContent({
     .limit(1);
 
   if (accountCheck.length === 0) redirect(`/app/${orgSlug}/welcome`);
+
+  const accountId = accountCheck[0]!.id;
 
   // Find the latest successful run for this org
   const latestRunRows = await db
@@ -141,10 +144,14 @@ async function OverviewContent({
 
   const totalMonthlyWaste = Number(latestRun.totalMonthlyWaste ?? 0);
   const resourceCount = latestRun.resourceCount ?? 0;
+  const lastScanAt = latestRun.finishedAt?.toISOString() ?? null;
 
   return (
     <>
-      <TabBar orgSlug={orgSlug} currentTab={tab} />
+      <div className="flex items-center justify-between mb-4">
+        <TabBar orgSlug={orgSlug} currentTab={tab} />
+        <RescanButton accountId={accountId} lastScanAt={lastScanAt} />
+      </div>
 
       {tab === "pulse" && (
         <PulseTab
@@ -157,7 +164,7 @@ async function OverviewContent({
       {tab === "feed" && (
         <FeedTab findings={findingRows} orgSlug={orgSlug} />
       )}
-      {tab === "map" && <MapTab findings={findingRows} />}
+      {tab === "map" && <MapTab findings={findingRows} orgSlug={orgSlug} />}
       {tab === "forecast" && <ForecastTab scanHistory={scanHistory} />}
     </>
   );
