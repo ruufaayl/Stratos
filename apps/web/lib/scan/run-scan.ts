@@ -141,26 +141,30 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
         // 6. Call engine — Python owns all dollar math
         const result = await analyze({ resources });
 
-        // 7. Persist opportunities
-        if (result.opportunities.length > 0) {
-          await db.insert(schema.opportunities).values(
-            result.opportunities.map((o) => {
-              const resourceId =
-                "resource_id" in o && typeof o.resource_id === "string"
-                  ? o.resource_id
-                  : null;
-              return {
-                runId,
-                accountId: account.id,
-                kind: o.kind,
-                resourceId,
-                monthlySavings: String(o.monthly_savings),
-                risk: o.risk !== undefined ? String(o.risk) : null,
-                engineData: o as Record<string, unknown>,
-              };
-            }),
-          );
-        }
+        // 7. Persist opportunities — capture inserted IDs for enrichment
+        const insertedOpps: { id: string; resourceId: string | null }[] =
+          result.opportunities.length > 0
+            ? await db
+                .insert(schema.opportunities)
+                .values(
+                  result.opportunities.map((o) => {
+                    const resourceId =
+                      "resource_id" in o && typeof o.resource_id === "string"
+                        ? o.resource_id
+                        : null;
+                    return {
+                      runId,
+                      accountId: account.id,
+                      kind: o.kind,
+                      resourceId,
+                      monthlySavings: String(o.monthly_savings),
+                      risk: o.risk !== undefined ? String(o.risk) : null,
+                      engineData: o as Record<string, unknown>,
+                    };
+                  }),
+                )
+                .returning({ id: schema.opportunities.id, resourceId: schema.opportunities.resourceId })
+            : [];
 
         const totalSavingsCents = Math.round(result.total_monthly_waste * 100);
 
@@ -181,6 +185,35 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
           .update(schema.accounts)
           .set({ lastScanAt: new Date() })
           .where(eq(schema.accounts.id, account.id));
+
+        // Best-effort Claude enrichment — does not affect scan success status.
+        // explainOpportunities returns [{resource_id, explanation}] in same order
+        // as input; we match by resource_id to find the correct DB row.
+        if (insertedOpps.length > 0) {
+          try {
+            const { explainOpportunities } = await import("@/lib/ai/explain");
+            const explanations = await explainOpportunities(result.opportunities);
+
+            // Build a lookup: resource_id → DB row id
+            const resourceIdToDbId = new Map<string, string>();
+            for (const row of insertedOpps) {
+              if (row.resourceId) resourceIdToDbId.set(row.resourceId, row.id);
+            }
+
+            await Promise.all(
+              explanations.map(async ({ resource_id, explanation }) => {
+                const dbId = resourceIdToDbId.get(resource_id);
+                if (!dbId) return;
+                await db
+                  .update(schema.opportunities)
+                  .set({ explanation })
+                  .where(eq(schema.opportunities.id, dbId));
+              }),
+            );
+          } catch (err) {
+            console.error("[runScan] enrichment failed (non-fatal):", err);
+          }
+        }
 
         return {
           runId,
