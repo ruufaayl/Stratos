@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import Link from "next/link";
 import { db, schema } from "@/lib/db";
 import { TabBar, type TabId } from "@/components/overview/tab-bar";
@@ -101,6 +101,44 @@ async function OverviewContent({
     0,
   );
 
+  // Kind breakdown for the latest run
+  const kindRows = latestRun
+    ? await db
+        .select({
+          kind: schema.opportunities.kind,
+          count: sql<number>`count(*)::int`,
+          total: sql<string>`sum(${schema.opportunities.monthlySavings})`,
+        })
+        .from(schema.opportunities)
+        .where(eq(schema.opportunities.runId, latestRun.id))
+        .groupBy(schema.opportunities.kind)
+    : [];
+
+  // Last 10 succeeded runs for trend chart
+  const scanHistoryRows = await db
+    .select({
+      finishedAt: schema.runs.finishedAt,
+      totalMonthlyWaste: schema.runs.totalMonthlyWaste,
+      opportunityCount: schema.runs.opportunityCount,
+    })
+    .from(schema.runs)
+    .innerJoin(schema.accounts, eq(schema.runs.accountId, schema.accounts.id))
+    .where(and(
+      eq(schema.accounts.orgId, orgId),
+      eq(schema.runs.status, "succeeded"),
+    ))
+    .orderBy(desc(schema.runs.finishedAt))
+    .limit(10);
+
+  const scanHistory = scanHistoryRows
+    .reverse() // chronological order for chart
+    .map((r, i) => ({
+      label: `Scan ${i + 1}`,
+      waste: Number(r.totalMonthlyWaste ?? 0),
+      findings: r.opportunityCount ?? 0,
+      date: r.finishedAt?.toLocaleDateString("en-US", { month: "short", day: "numeric" }) ?? "",
+    }));
+
   const totalMonthlyWaste = Number(latestRun.totalMonthlyWaste ?? 0);
   const resourceCount = latestRun.resourceCount ?? 0;
 
@@ -113,13 +151,14 @@ async function OverviewContent({
           totalMonthlyWaste={totalMonthlyWaste}
           resourceCount={resourceCount}
           realizedSavings={realizedSavings}
+          kindBreakdown={kindRows.map(r => ({ kind: r.kind, count: r.count, savings: Number(r.total ?? 0) }))}
         />
       )}
       {tab === "feed" && (
         <FeedTab findings={findingRows} orgSlug={orgSlug} />
       )}
       {tab === "map" && <MapTab findings={findingRows} />}
-      {tab === "forecast" && <ForecastTab />}
+      {tab === "forecast" && <ForecastTab scanHistory={scanHistory} />}
     </>
   );
 }
