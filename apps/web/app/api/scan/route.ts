@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { eq, and, gte, desc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, count } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db";
 import { runScan } from "@/lib/scan/run-scan";
 import { capture } from "@/lib/posthog/server";
+import { checkOrgTier } from "@/lib/billing/gate";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,39 @@ export async function POST(req: Request) {
       { error: "Account is not fully configured (missing IAM role)" },
       { status: 422 },
     );
+  }
+
+  // Pro gate — free tier limited to 10 scans/month
+  const FREE_SCAN_LIMIT = 10;
+  const tier = await checkOrgTier(orgId);
+  if (tier === "free") {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const result = await db
+      .select({ count: count() })
+      .from(schema.runs)
+      .innerJoin(schema.accounts, eq(schema.runs.accountId, schema.accounts.id))
+      .where(
+        and(
+          eq(schema.accounts.orgId, orgId),
+          gte(schema.runs.startedAt, startOfMonth),
+          lte(schema.runs.startedAt, endOfMonth),
+          eq(schema.runs.status, "completed"),
+        ),
+      );
+    const scansUsed = result[0]?.count ?? 0;
+    if (scansUsed >= FREE_SCAN_LIMIT) {
+      return NextResponse.json(
+        {
+          error: "upgrade_required",
+          message: "You've used all 10 free scans this month. Upgrade to Pro for unlimited scans.",
+          scansUsed,
+          scansLimit: FREE_SCAN_LIMIT,
+        },
+        { status: 402 },
+      );
+    }
   }
 
   // Check for in-flight or recent scan (5-min cooldown)

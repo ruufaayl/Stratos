@@ -5,7 +5,13 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn((a, b) => ({ _eq: [a, b] })),
   and: vi.fn((...args) => ({ _and: args })),
   gte: vi.fn((a, b) => ({ _gte: [a, b] })),
+  lte: vi.fn((a, b) => ({ _lte: [a, b] })),
   desc: vi.fn((a) => ({ _desc: a })),
+  count: vi.fn(() => ({ _count: true })),
+}));
+
+vi.mock("@/lib/billing/gate", () => ({
+  checkOrgTier: vi.fn().mockResolvedValue("pro"),
 }));
 
 const ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
