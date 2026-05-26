@@ -10,6 +10,7 @@ import { PaginationBar } from "@/components/findings/pagination-bar";
 import { dbRowToEngineOpportunity } from "@/lib/db/adapters";
 import { OpportunityCard } from "@/components/dashboard/opportunity-card";
 import { Empty } from "@/components/ui/empty";
+import { ExportButton } from "@/components/findings/export-button";
 import type { Opportunity as DbFinding } from "@/lib/db/schema";
 import type { Opportunity } from "@/lib/engine/types";
 
@@ -158,6 +159,12 @@ async function FindingsContent({
 
   return (
     <>
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm text-text-secondary">
+          {totalCount} finding{totalCount !== 1 ? "s" : ""}
+        </span>
+        <ExportButton runId={latestRun.id} />
+      </div>
       <FindingFilterBar orgSlug={orgSlug} currentKind={kind} />
       <div className="space-y-3">
         {pairs.map(({ row, opp }, i) => (
