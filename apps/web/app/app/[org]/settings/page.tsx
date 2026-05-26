@@ -5,6 +5,7 @@ import Link from "next/link";
 import { db, schema } from "@/lib/db";
 import { Chip } from "@/components/ui/chip";
 import { PortalButton } from "@/components/billing/portal-button";
+import { UsageBar } from "@/components/billing/usage-bar";
 
 export default async function SettingsPage({
   params,
@@ -176,6 +177,7 @@ export default async function SettingsPage({
               </Link>
             )}
           </div>
+          <UsageBar />
           {hasBillingAccount ? (
             <PortalButton />
           ) : (
