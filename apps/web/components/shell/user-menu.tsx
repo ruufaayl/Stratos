@@ -1,4 +1,5 @@
 "use client";
+import { useState, useEffect } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { LogOut, Settings, Shield, User } from "lucide-react";
 import { useUser, useClerk } from "@clerk/nextjs";
@@ -7,6 +8,7 @@ import { cn } from "@/lib/utils";
 export function UserMenu() {
   const { user } = useUser();
   const { signOut } = useClerk();
+  const [tier, setTier] = useState<"free" | "pro" | null>(null);
 
   const name = user?.fullName ?? "User";
   const email = user?.primaryEmailAddress?.emailAddress ?? "";
@@ -17,6 +19,15 @@ export function UserMenu() {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+
+  useEffect(() => {
+    fetch("/api/scan/usage")
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { tier: string } | null) => {
+        if (data) setTier(data.tier as "free" | "pro");
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <DropdownMenu.Root>
@@ -38,7 +49,17 @@ export function UserMenu() {
         >
           {/* User info header */}
           <div className="px-2 py-2 mb-1 border-b border-border-subtle">
-            <div className="text-sm font-medium text-text-primary truncate">{name}</div>
+            <div className="flex items-center">
+              <div className="text-sm font-medium text-text-primary truncate">{name}</div>
+              <span className={cn(
+                "ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                tier === "pro"
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                  : "bg-white/10 text-white/40 border border-white/10"
+              )}>
+                {tier === "pro" ? "Pro" : "Free"}
+              </span>
+            </div>
             <div className="text-xs text-text-muted truncate">{email}</div>
           </div>
 
