@@ -16,6 +16,7 @@ import {
   TD,
 } from "@/components/ui/table";
 import { usd } from "@/lib/utils";
+import { ExportButton } from "@/components/findings/export-button";
 
 // ─── Relative time helper ────────────────────────────────────────────────────
 
@@ -88,6 +89,7 @@ async function ScansContent({
       resourceCount:     schema.runs.resourceCount,
       opportunityCount:  schema.runs.opportunityCount,
       totalMonthlyWaste: schema.runs.totalMonthlyWaste,
+      errorMessage:      schema.runs.errorMessage,
       // Account fields for the join
       accountName:       schema.accounts.name,
       roleArn:           schema.accounts.roleArn,
@@ -148,6 +150,13 @@ async function ScansContent({
 
               <TD>
                 <StatusChip status={run.status} />
+                {run.status === "failed" && run.errorMessage ? (
+                  <p className="mt-0.5 text-xs text-text-faint font-mono leading-tight">
+                    {run.errorMessage.length > 60
+                      ? `${run.errorMessage.slice(0, 60)}…`
+                      : run.errorMessage}
+                  </p>
+                ) : null}
               </TD>
 
               <TD className="font-mono text-xs text-text-muted tabular-nums">
@@ -174,12 +183,15 @@ async function ScansContent({
 
               <TD className="text-right">
                 {run.status === "succeeded" ? (
-                  <Link
-                    href={`/app/${orgSlug}?tab=feed`}
-                    className="text-[12px] text-intel-400 hover:text-intel-300 transition-colors whitespace-nowrap"
-                  >
-                    View findings →
-                  </Link>
+                  <div className="inline-flex items-center gap-2">
+                    <Link
+                      href={`/app/${orgSlug}?tab=feed`}
+                      className="text-[12px] text-intel-400 hover:text-intel-300 transition-colors whitespace-nowrap"
+                    >
+                      View findings →
+                    </Link>
+                    <ExportButton runId={run.id} className="text-xs" />
+                  </div>
                 ) : (
                   <span className="text-[12px] text-text-faint">—</span>
                 )}

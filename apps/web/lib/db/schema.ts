@@ -77,6 +77,8 @@ export const runs = pgTable("runs", {
   opportunityCount: integer("opportunity_count"),
   // Raw engine output, kept for audit ("show me the math")
   engineRaw: jsonb("engine_raw").$type<Record<string, unknown>>(),
+  // Error message captured when status = "failed"
+  errorMessage: text("error_message"),
 });
 
 // Each ranked, dollar-quantified opportunity produced by the engine.

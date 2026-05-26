@@ -18,12 +18,17 @@
  *                   This function feeds input and persists output only.
  */
 
+import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { assumeRole } from "@/lib/aws/assume-role";
 import { listEc2Instances } from "@/lib/aws/ec2-lister";
 import { listEbsVolumes } from "@/lib/aws/ebs-lister";
-import { fetchInstanceTelemetry } from "@/lib/aws/cloudwatch-fetcher";
+import { listRdsInstances } from "@/lib/aws/rds-lister";
+import {
+  fetchInstanceTelemetry,
+  fetchRdsCpuMetrics,
+} from "@/lib/aws/cloudwatch-fetcher";
 import { analyze } from "@/lib/engine/client";
 
 export interface ScanInput {
@@ -68,7 +73,7 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
   async function markFailed(message: string): Promise<ScanResult> {
     await db
       .update(schema.runs)
-      .set({ finishedAt: new Date(), status: "failed" })
+      .set({ finishedAt: new Date(), status: "failed", errorMessage: message })
       .where(eq(schema.runs.id, runId));
     return { runId, status: "failed", totalFindings: 0, totalSavingsCents: 0, error: message };
   }
@@ -97,7 +102,23 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
           ebsVolumes = [];
         }
 
-        if (instances.length === 0 && ebsVolumes.length === 0) {
+        // 3c. List RDS instances (D10-B — idle DB candidates).
+        // Non-fatal: idle RDS is one of the biggest waste lines we can find,
+        // but a permissions issue on rds:DescribeDBInstances must never sink
+        // the whole scan.
+        let rdsInstances: Awaited<ReturnType<typeof listRdsInstances>> = [];
+        try {
+          rdsInstances = await listRdsInstances(credentials, account.region);
+        } catch (err) {
+          console.error("[runScan] listRdsInstances failed (non-fatal):", err);
+          rdsInstances = [];
+        }
+
+        if (
+          instances.length === 0 &&
+          ebsVolumes.length === 0 &&
+          rdsInstances.length === 0
+        ) {
           await db
             .update(schema.runs)
             .set({
@@ -119,6 +140,23 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
         const telemetry =
           instances.length > 0
             ? await fetchInstanceTelemetry(credentials, instances)
+            : [];
+
+        // 4b. Fetch RDS CPU metrics in parallel (D10-B).
+        // Same 30-min Average pattern as EC2. A per-instance failure returns
+        // [] for that instance — the engine will simply skip it (idle.detect
+        // requires ≥1 CPU sample).
+        const cwClient = new CloudWatchClient({
+          region: account.region,
+          credentials,
+        });
+        const rdsCpuArrays =
+          rdsInstances.length > 0
+            ? await Promise.all(
+                rdsInstances.map((inst) =>
+                  fetchRdsCpuMetrics(cwClient, inst.instanceId, 14),
+                ),
+              )
             : [];
 
         // 5. Filter to instances with enough history for the engine
@@ -146,15 +184,38 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
           create_time: v.createTime,
         }));
 
-        if (resources.length === 0 && ebs_volumes.length === 0) {
-          // All instances are too new — no history yet, no zombie volumes either.
+        // Project RDS instances into the engine payload (D10-B). We pass
+        // hourly_cost: 0 here — the engine owns the RDS pricing catalog and
+        // applies it from instance_class. Architecture law: Python owns truth.
+        // TODO: use RDS pricing (mirror an RDS catalog on the TS side once we
+        // need pre-engine cost previews).
+        const rds_instances = rdsInstances
+          .map((inst, i) => ({
+            instance_id: inst.instanceId,
+            instance_class: inst.instanceClass,
+            engine: inst.engine,
+            multi_az: inst.multiAz,
+            storage_gb: inst.storageGb,
+            region: inst.region,
+            cpu_utilization_pct: rdsCpuArrays[i] ?? [],
+            hourly_cost: 0,
+          }))
+          .filter((r) => r.cpu_utilization_pct.length >= MIN_DATAPOINTS);
+
+        if (
+          resources.length === 0 &&
+          ebs_volumes.length === 0 &&
+          rds_instances.length === 0
+        ) {
+          // All resources are too new (no history) or absent — nothing to score.
           await db
             .update(schema.runs)
             .set({
               finishedAt: new Date(),
               status: "succeeded",
               totalMonthlyWaste: "0",
-              resourceCount: instances.length + ebsVolumes.length,
+              resourceCount:
+                instances.length + ebsVolumes.length + rdsInstances.length,
               opportunityCount: 0,
             })
             .where(eq(schema.runs.id, runId));
@@ -166,7 +227,7 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
         }
 
         // 6. Call engine — Python owns all dollar math
-        const result = await analyze({ resources, ebs_volumes });
+        const result = await analyze({ resources, ebs_volumes, rds_instances });
 
         // 7. Persist opportunities — capture inserted IDs for enrichment
         const insertedOpps: { id: string; resourceId: string | null }[] =
