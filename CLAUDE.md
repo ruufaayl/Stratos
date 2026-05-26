@@ -2,8 +2,13 @@
 # AI-Native Cloud Cost Intelligence — The Master Context
 
 > This is the single source of truth for WHAT we are building and HOW we
-> operate. Read this first, then ENGINE.md (the math), FOUNDATIONS.md (the
-> open-source supply chain), and HARVEST.md (the build+prove protocol).
+> operate. Read this first, then **STRATEGY.md** (strategic operating context +
+> full phase roadmap + security checklist + monetization + growth), then
+> ENGINE.md (the math), FOUNDATIONS.md (the open-source supply chain), and
+> HARVEST.md (the build+prove protocol).
+>
+> **Every session must read STRATEGY.md before making architectural, product,
+> security, or execution decisions.**
 
 ---
 

@@ -22,7 +22,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://stratos.ai"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://stratos.ai"),
   title: {
     default: "Stratos — Cloud Cost Intelligence",
     template: "%s | Stratos",

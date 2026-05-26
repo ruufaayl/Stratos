@@ -39,7 +39,6 @@ export async function POST(req: Request) {
   if (webhookSecret) {
     try {
       // Dynamic import so the build doesn't hard-fail when svix is absent.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       // @ts-expect-error — svix not yet in package.json; run `pnpm add svix --filter web`
       const { Webhook } = await import("svix") as { Webhook: new (secret: string) => { verify(body: string, headers: Record<string, string>): void } };
       const wh = new Webhook(webhookSecret);
