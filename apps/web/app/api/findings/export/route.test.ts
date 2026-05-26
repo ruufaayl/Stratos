@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
+vi.mock("@/lib/posthog/server", () => ({ capture: vi.fn() }));
+vi.mock("@/lib/billing/gate", () => ({
+  checkOrgTier: vi.fn().mockResolvedValue("pro"),
+}));
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((a, b) => ({ _eq: [a, b] })),
   and: vi.fn((...args) => ({ _and: args })),
@@ -84,6 +88,7 @@ vi.mock("@/lib/db", () => {
 });
 
 import { auth } from "@clerk/nextjs/server";
+import { checkOrgTier } from "@/lib/billing/gate";
 import { GET } from "./route";
 
 const RUN_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -245,5 +250,13 @@ describe("GET /api/findings/export", () => {
     expect(res.headers.get("Content-Disposition")).toBe(
       `attachment; filename="stratos-findings-${RUN_ID}.csv"`,
     );
+  });
+
+  it("returns 402 with upgrade_required when org is on free tier", async () => {
+    vi.mocked(checkOrgTier).mockResolvedValueOnce("free");
+    const res = await GET(makeRequest(RUN_ID));
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("upgrade_required");
   });
 });

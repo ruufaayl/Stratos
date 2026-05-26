@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
+vi.mock("@/lib/posthog/server", () => ({ capture: vi.fn() }));
+vi.mock("@/lib/billing/gate", () => ({
+  checkOrgTier: vi.fn().mockResolvedValue("pro"),
+}));
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((a, b) => ({ _eq: [a, b] })),
   and: vi.fn((...args) => ({ _and: args })),
@@ -33,6 +37,7 @@ vi.mock("@/lib/db", () => {
 });
 
 import { auth } from "@clerk/nextjs/server";
+import { checkOrgTier } from "@/lib/billing/gate";
 import { PATCH } from "./route";
 
 const ID_A = "11111111-1111-1111-1111-111111111111";
@@ -140,5 +145,13 @@ describe("PATCH /api/findings/bulk", () => {
     expect(body.updated).toBe(0);
     expect(body.skipped).toBe(2);
     expect(updateSetMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 402 with upgrade_required when org is on free tier", async () => {
+    vi.mocked(checkOrgTier).mockResolvedValueOnce("free");
+    const res = await PATCH(makeReq({ ids: [ID_A], action: "apply" }));
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("upgrade_required");
   });
 });

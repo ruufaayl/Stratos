@@ -76,7 +76,7 @@ export async function POST(req: Request) {
           eq(schema.accounts.orgId, orgId),
           gte(schema.runs.startedAt, startOfMonth),
           lte(schema.runs.startedAt, endOfMonth),
-          eq(schema.runs.status, "completed"),
+          eq(schema.runs.status, "succeeded"),
         ),
       );
     const scansUsed = result[0]?.count ?? 0;
