@@ -8,8 +8,11 @@ const isPublic = createRouteMatcher([
   "/sign-up(.*)",
   "/pricing",                // pricing is public (CTA gates work without auth)
   "/proof(.*)",              // the public demo page is intentionally open
+  "/privacy",                // privacy policy — no auth required
+  "/terms",                  // terms of service — no auth required
   "/engine/health",          // pass-through to engine health probe
   "/api/stripe/webhook",     // Stripe POSTs here with no Clerk session
+  "/api/webhooks/(.*)",      // Clerk (and future) webhooks — no session cookie
   "/api/digest(.*)",         // Vercel Cron + per-user digest hits, auth via CRON_SECRET
 ]);
 
