@@ -2,21 +2,29 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 import { db, schema } from "@/lib/db";
 import { FindingFilterBar, type KindFilter } from "@/components/findings/finding-filter-bar";
+import { PaginationBar } from "@/components/findings/pagination-bar";
 import { dbRowToEngineOpportunity } from "@/lib/db/adapters";
 import { OpportunityCard } from "@/components/dashboard/opportunity-card";
 import { Empty } from "@/components/ui/empty";
 import type { Opportunity as DbFinding } from "@/lib/db/schema";
 import type { Opportunity } from "@/lib/engine/types";
 
+const PAGE_SIZE = 20;
+
 const VALID_KINDS = ["idle", "rightsize", "anomaly", "commitment", "zombie"] as const;
 type ValidKind = (typeof VALID_KINDS)[number];
 
 function parseKind(raw: string | undefined): KindFilter {
   return (VALID_KINDS.includes(raw as ValidKind) ? raw : null) as KindFilter;
+}
+
+function parsePage(raw: string | undefined): number {
+  const n = parseInt(raw ?? "1", 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
 }
 
 /** Skeleton shown during Suspense fallback */
@@ -39,10 +47,12 @@ async function FindingsContent({
   orgId,
   orgSlug,
   kind,
+  page,
 }: {
   orgId: string;
   orgSlug: string;
   kind: KindFilter;
+  page: number;
 }) {
   // Latest succeeded run for this org
   const latestRunRows = await db
@@ -78,7 +88,7 @@ async function FindingsContent({
     );
   }
 
-  // Fetch opportunities from the latest run, with optional kind filter
+  // Build the shared WHERE clause (reused for data query + count query)
   const whereClause = kind
     ? and(
         eq(schema.opportunities.runId, latestRun.id),
@@ -86,15 +96,15 @@ async function FindingsContent({
       )
     : eq(schema.opportunities.runId, latestRun.id);
 
-  const findingRows = await db
-    .select()
+  // Count query — total matching rows for pagination maths
+  const countRows = await db
+    .select({ count: sql<number>`count(*)::int` })
     .from(schema.opportunities)
-    .where(whereClause)
-    .orderBy(desc(schema.opportunities.monthlySavings))
-    .limit(100);
+    .where(whereClause);
+  const totalCount = countRows[0]?.count ?? 0;
 
   // Empty-filtered: kind filter produced no results
-  if (findingRows.length === 0 && kind !== null) {
+  if (totalCount === 0 && kind !== null) {
     return (
       <>
         <FindingFilterBar orgSlug={orgSlug} currentKind={kind} />
@@ -115,7 +125,7 @@ async function FindingsContent({
   }
 
   // Empty-first: scan succeeded but no findings
-  if (findingRows.length === 0) {
+  if (totalCount === 0) {
     return (
       <>
         <FindingFilterBar orgSlug={orgSlug} currentKind={null} />
@@ -126,6 +136,18 @@ async function FindingsContent({
       </>
     );
   }
+
+  // Clamp page to valid range (handles out-of-range ?page= values)
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
+  const findingRows = await db
+    .select()
+    .from(schema.opportunities)
+    .where(whereClause)
+    .orderBy(desc(schema.opportunities.monthlySavings))
+    .limit(PAGE_SIZE)
+    .offset((safePage - 1) * PAGE_SIZE);
 
   type Pair = { row: DbFinding; opp: Opportunity };
   const pairs = findingRows.reduce<Pair[]>((acc, row) => {
@@ -146,16 +168,18 @@ async function FindingsContent({
           >
             <OpportunityCard
               opportunity={opp}
-              index={i}
+              index={(safePage - 1) * PAGE_SIZE + i}
               explanation={row.explanation ?? undefined}
             />
           </Link>
         ))}
       </div>
-      <p className="text-xs text-text-faint text-center mt-4">
-        {pairs.length} finding{pairs.length !== 1 ? "s" : ""} from latest scan
-        {kind ? ` · filtered by ${kind}` : ""}
-      </p>
+      <PaginationBar
+        page={safePage}
+        pageSize={PAGE_SIZE}
+        totalCount={totalCount}
+        baseHref={`/app/${orgSlug}/findings`}
+      />
     </>
   );
 }
@@ -165,12 +189,13 @@ export default async function FindingsPage({
   searchParams,
 }: {
   params: { org: string };
-  searchParams: { kind?: string };
+  searchParams: { kind?: string; page?: string };
 }) {
   const { orgId } = await auth();
   if (!orgId) redirect(`/sign-in?return_to=/app/${params.org}/findings`);
 
   const kind = parseKind(searchParams.kind);
+  const page = parsePage(searchParams.page);
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -178,7 +203,7 @@ export default async function FindingsPage({
         STRATOS · FINDINGS
       </div>
       <Suspense fallback={<FindingsSkeleton />}>
-        <FindingsContent orgId={orgId} orgSlug={params.org} kind={kind} />
+        <FindingsContent orgId={orgId} orgSlug={params.org} kind={kind} page={page} />
       </Suspense>
     </div>
   );
