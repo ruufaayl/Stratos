@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db";
 import { runScan } from "@/lib/scan/run-scan";
@@ -55,6 +55,35 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Account is not fully configured (missing IAM role)" },
       { status: 422 },
+    );
+  }
+
+  // Check for in-flight or recent scan (5-min cooldown)
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const recentRun = await db
+    .select({ id: schema.runs.id, status: schema.runs.status, startedAt: schema.runs.startedAt })
+    .from(schema.runs)
+    .where(and(
+      eq(schema.runs.accountId, accountId),
+      gte(schema.runs.startedAt, fiveMinutesAgo),
+    ))
+    .orderBy(desc(schema.runs.startedAt))
+    .limit(1);
+
+  if (recentRun[0]) {
+    const run = recentRun[0];
+    if (run.status === "running") {
+      return NextResponse.json(
+        { error: "scan_in_progress", message: "A scan is already running.", runId: run.id },
+        { status: 409 }
+      );
+    }
+    const retryAfterSeconds = Math.ceil(
+      (5 * 60 * 1000 - (Date.now() - run.startedAt!.getTime())) / 1000
+    );
+    return NextResponse.json(
+      { error: "rate_limited", message: "Scan ran recently. Please wait before scanning again.", retryAfterSeconds },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
     );
   }
 

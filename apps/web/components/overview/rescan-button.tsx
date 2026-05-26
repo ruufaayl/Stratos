@@ -7,6 +7,8 @@ interface RescanButtonProps {
   lastScanAt: string | null; // ISO string (serialisable from server)
 }
 
+type ScanStatus = "idle" | "scanning" | "done" | "error" | "rate_limited";
+
 function timeAgo(iso: string | null): string {
   if (!iso) return "Never scanned";
   const diff = Date.now() - new Date(iso).getTime();
@@ -21,7 +23,8 @@ function timeAgo(iso: string | null): string {
 
 export function RescanButton({ accountId, lastScanAt }: RescanButtonProps) {
   const router = useRouter();
-  const [status, setStatus] = useState<"idle" | "scanning" | "done" | "error">("idle");
+  const [status, setStatus] = useState<ScanStatus>("idle");
+  const [rateLimitLabel, setRateLimitLabel] = useState<string>("");
 
   async function handleRescan() {
     setStatus("scanning");
@@ -34,6 +37,15 @@ export function RescanButton({ accountId, lastScanAt }: RescanButtonProps) {
       if (res.ok) {
         setStatus("done");
         router.refresh();
+      } else if (res.status === 409) {
+        // Scan already in progress — treat as success, it is already running
+        setStatus("scanning");
+      } else if (res.status === 429) {
+        // Rate limited — parse retryAfterSeconds and show informational label
+        const body = (await res.json()) as { retryAfterSeconds?: number };
+        const waitSecs = body.retryAfterSeconds ?? 300;
+        setRateLimitLabel(`Scan ran recently — wait ${waitSecs}s`);
+        setStatus("rate_limited");
       } else {
         setStatus("error");
       }
@@ -42,17 +54,24 @@ export function RescanButton({ accountId, lastScanAt }: RescanButtonProps) {
     }
   }
 
+  function statusLabel(): string {
+    switch (status) {
+      case "scanning":
+        return "Scanning…";
+      case "done":
+        return "Scan complete";
+      case "error":
+        return "Scan failed";
+      case "rate_limited":
+        return rateLimitLabel;
+      default:
+        return `Last scan: ${timeAgo(lastScanAt)}`;
+    }
+  }
+
   return (
     <div className="flex items-center gap-3">
-      <span className="text-xs text-text-faint font-mono">
-        {status === "scanning"
-          ? "Scanning…"
-          : status === "done"
-          ? "Scan complete"
-          : status === "error"
-          ? "Scan failed"
-          : `Last scan: ${timeAgo(lastScanAt)}`}
-      </span>
+      <span className="text-xs text-text-faint font-mono">{statusLabel()}</span>
       <button
         onClick={handleRescan}
         disabled={status === "scanning"}
