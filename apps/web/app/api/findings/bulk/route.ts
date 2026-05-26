@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db, schema } from "@/lib/db";
 import { capture } from "@/lib/posthog/server";
 import { checkOrgTier } from "@/lib/billing/gate";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 
 // Cap requests so a runaway client can't blow up the DB / serverless quota.
 const MAX_IDS = 200;
@@ -18,6 +19,9 @@ export async function PATCH(req: Request) {
   const { userId, orgId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!orgId) return NextResponse.json({ error: "No active organization" }, { status: 400 });
+
+  const rl = await checkRateLimit(`bulk:${orgId}`, 60, 3600); // 60/hour/org
+  if (!rl.allowed) return rateLimitExceededResponse(rl.reset);
 
   const tier = await checkOrgTier(orgId);
   if (tier !== "pro") {

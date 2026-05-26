@@ -14,6 +14,11 @@ vi.mock("@/lib/billing/gate", () => ({
   checkOrgTier: vi.fn().mockResolvedValue("pro"),
 }));
 
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 20, remaining: 19, reset: Date.now() + 3600000 }),
+  rateLimitExceededResponse: vi.fn().mockReturnValue(new Response(JSON.stringify({ error: "rate_limit_exceeded" }), { status: 429 })),
+}));
+
 const ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const RUN_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 

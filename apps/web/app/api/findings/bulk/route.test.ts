@@ -5,6 +5,10 @@ vi.mock("@/lib/posthog/server", () => ({ capture: vi.fn() }));
 vi.mock("@/lib/billing/gate", () => ({
   checkOrgTier: vi.fn().mockResolvedValue("pro"),
 }));
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 60, remaining: 59, reset: Date.now() + 3600000 }),
+  rateLimitExceededResponse: vi.fn().mockReturnValue(new Response(JSON.stringify({ error: "rate_limit_exceeded" }), { status: 429 })),
+}));
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((a, b) => ({ _eq: [a, b] })),
   and: vi.fn((...args) => ({ _and: args })),

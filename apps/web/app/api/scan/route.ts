@@ -6,6 +6,7 @@ import { db, schema } from "@/lib/db";
 import { runScan } from "@/lib/scan/run-scan";
 import { capture } from "@/lib/posthog/server";
 import { checkOrgTier } from "@/lib/billing/gate";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,9 @@ export async function POST(req: Request) {
   if (!orgId) {
     return NextResponse.json({ error: "No active organization" }, { status: 400 });
   }
+
+  const rl = await checkRateLimit(`scan:${orgId}`, 20, 3600); // 20/hour/org
+  if (!rl.allowed) return rateLimitExceededResponse(rl.reset);
 
   let body: unknown;
   try {

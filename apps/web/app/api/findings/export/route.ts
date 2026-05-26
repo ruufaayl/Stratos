@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/lib/db";
 import { capture } from "@/lib/posthog/server";
 import { checkOrgTier } from "@/lib/billing/gate";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,9 @@ export async function GET(req: Request) {
   if (!orgId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = await checkRateLimit(`export:${orgId}`, 30, 3600); // 30/hour/org
+  if (!rl.allowed) return rateLimitExceededResponse(rl.reset);
 
   const tier = await checkOrgTier(orgId);
   if (tier !== "pro") {
