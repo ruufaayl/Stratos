@@ -374,11 +374,13 @@ describe("runScan", () => {
         bucketName: "stratos-prod-logs",
         region: "us-east-1",
         creationDate: "2024-06-01T00:00:00.000Z",
+        sizeBytes: 0,
       },
       {
         bucketName: "stratos-old-backups",
         region: "eu-west-1",
         creationDate: "2023-01-15T00:00:00.000Z",
+        sizeBytes: 0,
       },
     ]);
 
@@ -391,11 +393,13 @@ describe("runScan", () => {
         bucket_name: "stratos-prod-logs",
         region: "us-east-1",
         creation_date: "2024-06-01T00:00:00.000Z",
+        size_bytes: 0,
       },
       {
         bucket_name: "stratos-old-backups",
         region: "eu-west-1",
         creation_date: "2023-01-15T00:00:00.000Z",
+        size_bytes: 0,
       },
     ]);
   });
@@ -411,6 +415,7 @@ describe("runScan", () => {
         bucketName: "global-bucket",
         region: "us-east-1",
         creationDate: "2024-01-01T00:00:00.000Z",
+        sizeBytes: 0,
       },
     ]);
 
@@ -463,6 +468,7 @@ describe("runScan", () => {
         bucketName: "only-bucket",
         region: "us-east-1",
         creationDate: "2024-01-01T00:00:00.000Z",
+        sizeBytes: 0,
       },
     ]);
 

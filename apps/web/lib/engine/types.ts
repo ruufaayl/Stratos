@@ -137,6 +137,7 @@ export const s3BucketIn = z.object({
   bucket_name: z.string(),
   region: z.string().default("us-east-1"),
   creation_date: z.string(),
+  size_bytes: z.number().default(0),
 });
 
 export type S3BucketIn = z.infer<typeof s3BucketIn>;

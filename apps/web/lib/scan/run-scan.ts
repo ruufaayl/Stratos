@@ -299,6 +299,7 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
           bucket_name: b.bucketName,
           region: b.region,
           creation_date: b.creationDate,
+          size_bytes: b.sizeBytes,
         }));
 
         if (

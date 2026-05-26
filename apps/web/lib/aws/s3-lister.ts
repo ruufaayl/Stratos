@@ -6,11 +6,12 @@
  * separately via GetBucketLocation. An empty/null response means us-east-1
  * (legacy AWS behaviour, documented).
  *
- * The engine will eventually score buckets by last-modified-object age and
- * storage class to find true zombies. For now we just enumerate so the
- * payload is future-proof.
+ * D12-A: We also fetch CloudWatch BucketSizeBytes per bucket so the engine
+ * can score size + age as a zombie heuristic. The engine owns all dollar
+ * arithmetic — we only collect raw bytes here (architecture law).
  *
- * ARCHITECTURE LAW: Read-only. s3:ListAllMyBuckets + s3:GetBucketLocation only.
+ * ARCHITECTURE LAW: Read-only. s3:ListAllMyBuckets + s3:GetBucketLocation
+ *                   + cloudwatch:GetMetricStatistics only.
  */
 
 import {
@@ -19,12 +20,17 @@ import {
   GetBucketLocationCommand,
   type ListBucketsCommandOutput,
 } from "@aws-sdk/client-s3";
+import {
+  CloudWatchClient,
+  GetMetricStatisticsCommand,
+} from "@aws-sdk/client-cloudwatch";
 import type { AwsCredentials } from "./assume-role";
 
 export interface S3BucketRecord {
   bucketName: string;
   region: string;
   creationDate: string; // ISO string
+  sizeBytes: number;
 }
 
 /**
@@ -39,11 +45,75 @@ function normalizeLocation(loc: string | undefined | null): string {
 }
 
 /**
- * Returns all S3 buckets on the account, annotated with region + creation date.
+ * Fetch BucketSizeBytes (StandardStorage) for a bucket via CloudWatch.
+ *
+ * S3 publishes BucketSizeBytes once per day to AWS/S3 in the bucket's region.
+ * We query the last 3 days at daily granularity and pick the most recent
+ * Average datapoint. If CloudWatch returns nothing (brand-new bucket, missing
+ * permissions, region mismatch, etc.) we return 0 — non-fatal everywhere.
+ *
+ * Note: the `s3Client` arg is unused here but kept in the signature for
+ * symmetry with other per-bucket fetchers; the actual call goes through a
+ * CloudWatch client scoped to the bucket's region.
+ */
+export async function fetchS3BucketSizeBytes(
+  _s3Client: S3Client,
+  credentials: AwsCredentials,
+  bucketName: string,
+  region: string,
+): Promise<number> {
+  // S3 metrics live in CloudWatch in the bucket's home region. Fall back to
+  // us-east-1 if for any reason the region is empty.
+  const cwRegion = region || "us-east-1";
+  const cw = new CloudWatchClient({ region: cwRegion, credentials });
+
+  const endTime = new Date();
+  // 3-day lookback — S3 storage metrics are 1-day granularity, so 3 datapoints
+  // is plenty to find "the most recent one" without missing brand-new buckets.
+  const startTime = new Date(endTime.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+  try {
+    const res = await cw.send(
+      new GetMetricStatisticsCommand({
+        Namespace: "AWS/S3",
+        MetricName: "BucketSizeBytes",
+        Dimensions: [
+          { Name: "BucketName", Value: bucketName },
+          { Name: "StorageType", Value: "StandardStorage" },
+        ],
+        StartTime: startTime,
+        EndTime: endTime,
+        Period: 86400, // 1 day
+        Statistics: ["Average"],
+      }),
+    );
+
+    const datapoints = res.Datapoints ?? [];
+    if (datapoints.length === 0) return 0;
+
+    // Pick the most recent Average value.
+    const sorted = [...datapoints].sort(
+      (a, b) => (a.Timestamp?.getTime() ?? 0) - (b.Timestamp?.getTime() ?? 0),
+    );
+    const latest = sorted[sorted.length - 1];
+    return latest?.Average ?? 0;
+  } catch (err) {
+    console.error(
+      `[fetchS3BucketSizeBytes] GetMetricStatistics failed for ${bucketName} (non-fatal):`,
+      err,
+    );
+    return 0;
+  }
+}
+
+/**
+ * Returns all S3 buckets on the account, annotated with region, creation date,
+ * and CloudWatch-reported size in bytes.
  *
  * Non-fatal at every level:
  *   - ListBuckets failure → return []
  *   - Per-bucket GetBucketLocation failure → skip that bucket
+ *   - Per-bucket CloudWatch failure → sizeBytes = 0 (still include the bucket)
  *
  * A misconfigured S3 permission must never sink a multi-region scan.
  */
@@ -89,10 +159,19 @@ export async function listS3Buckets(
           ? bucket.CreationDate
           : new Date().toISOString();
 
+    // CloudWatch BucketSizeBytes — non-fatal, defaults to 0 on any failure.
+    const sizeBytes = await fetchS3BucketSizeBytes(
+      s3,
+      credentials,
+      bucket.Name,
+      region,
+    );
+
     records.push({
       bucketName: bucket.Name,
       region,
       creationDate,
+      sizeBytes,
     });
   }
 

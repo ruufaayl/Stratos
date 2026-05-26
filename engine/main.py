@@ -91,6 +91,11 @@ RDS_HOURLY_USD: dict[str, float] = {
 }
 RDS_DEFAULT_HOURLY_USD = 0.171  # db.m5.large rate — sensible fallback
 
+# S3 Standard pricing — USD per GB-month, us-east-1, Jan 2026 reference.
+# Source: aws.amazon.com/s3/pricing. Engine owns catalog (architecture law).
+S3_STANDARD_GB_MONTH_USD = 0.023
+S3_ZOMBIE_MIN_DAYS = 90  # Only flag buckets older than this as suspects.
+
 STARTED_AT = time.time()
 
 app = FastAPI(
@@ -167,6 +172,15 @@ class RdsInstanceIn(BaseModel):
     hourly_cost: float = 0.0      # ignored; engine owns the catalog
 
 
+class S3BucketIn(BaseModel):
+    """An S3 bucket. Engine scores size + age for zombie candidates."""
+
+    bucket_name: str
+    region: str = "us-east-1"
+    creation_date: str  # ISO 8601
+    size_bytes: float = 0.0
+
+
 class AnalyzeRequest(BaseModel):
     resources: list[TelemetryIn]
     daily_cost: list[float] | None = Field(
@@ -179,6 +193,10 @@ class AnalyzeRequest(BaseModel):
     rds_instances: list[RdsInstanceIn] = Field(
         default_factory=list,
         description="RDS DB instances to scan for idle waste (D10-B)",
+    )
+    s3_buckets: list[S3BucketIn] = Field(
+        default_factory=list,
+        description="S3 buckets to score for zombie waste (D12-A)",
     )
 
 
@@ -298,6 +316,48 @@ def _ebs_to_telemetry(v: EbsVolumeIn) -> ResourceTelemetry:
     )
 
 
+def _s3_zombie_opportunities(buckets: list[S3BucketIn]) -> list[dict[str, Any]]:
+    """Score S3 buckets for zombie waste.
+
+    Heuristic: bucket with size_bytes > 0 AND creation_date > S3_ZOMBIE_MIN_DAYS ago
+    → stale zombie candidate. Monthly savings = deletion of the whole bucket.
+    Low confidence (0.6) because we can't see access patterns without S3 access logs.
+    """
+    import datetime
+    now = datetime.datetime.now(datetime.timezone.utc)
+    opps: list[dict[str, Any]] = []
+    for b in buckets:
+        if b.size_bytes <= 0:
+            continue  # Empty bucket costs nothing — skip.
+        try:
+            created = datetime.datetime.fromisoformat(
+                b.creation_date.replace("Z", "+00:00")
+            )
+        except (ValueError, AttributeError):
+            continue
+        age_days = (now - created).days
+        if age_days < S3_ZOMBIE_MIN_DAYS:
+            continue  # Too new to call zombie.
+        size_gb = b.size_bytes / (1024 ** 3)
+        monthly_cost = size_gb * S3_STANDARD_GB_MONTH_USD
+        if monthly_cost < 0.01:
+            continue  # Under 1 cent/month — not worth surfacing.
+        opps.append({
+            "kind": "zombie",
+            "resource_id": b.bucket_name,
+            "zombie_label": "stale_bucket",
+            "monthly_savings": round(monthly_cost, 2),
+            "risk": 0.4,  # Moderate risk — we can't confirm last-accessed date.
+            "confidence": 0.6,
+            "max_cpu_pct": 0.0,
+            "data_days": float(age_days),
+            "service": "S3",
+            "region": b.region,
+            "size_gb": round(size_gb, 3),
+        })
+    return opps
+
+
 def _commitment_opportunities(fleet: list[ResourceTelemetry]) -> list[dict[str, Any]]:
     """Newsvendor-optimal commitment recommendations grouped by instance type.
 
@@ -364,10 +424,10 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
 
     Output is sorted by monthly_savings descending — the dollar headline rules.
     """
-    if not req.resources and not req.ebs_volumes and not req.rds_instances:
+    if not req.resources and not req.ebs_volumes and not req.rds_instances and not req.s3_buckets:
         raise HTTPException(
             status_code=400,
-            detail="resources, ebs_volumes, or rds_instances must not be empty",
+            detail="resources, ebs_volumes, rds_instances, or s3_buckets must not be empty",
         )
 
     fleet = [_to_telemetry(r) for r in req.resources]
@@ -408,6 +468,11 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
         if opp["idle_score"] >= 0.7:
             opportunities.append(opp)
 
+    # S3 zombie buckets (D12-A). Age + size heuristic; confidence 0.6 because
+    # we can't see access patterns without S3 access logs.
+    s3_count = len(req.s3_buckets)
+    opportunities.extend(_s3_zombie_opportunities(req.s3_buckets))
+
     idle_ids: set[str] = set()
     for t in fleet:
         if t.resource_id in zombie_ids:
@@ -442,7 +507,7 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
     )
 
     return {
-        "resource_count": len(fleet) + ebs_count + rds_count,
+        "resource_count": len(fleet) + ebs_count + rds_count + s3_count,
         "opportunity_count": len(opportunities),
         "total_monthly_waste": total_monthly_waste,
         "opportunities": opportunities,
