@@ -22,6 +22,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { assumeRole } from "@/lib/aws/assume-role";
 import { listEc2Instances } from "@/lib/aws/ec2-lister";
+import { listEbsVolumes } from "@/lib/aws/ebs-lister";
 import { fetchInstanceTelemetry } from "@/lib/aws/cloudwatch-fetcher";
 import { analyze } from "@/lib/engine/client";
 
@@ -85,7 +86,18 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
         // 3. List EC2 instances
         const instances = await listEc2Instances(credentials, account.region);
 
-        if (instances.length === 0) {
+        // 3b. List unattached EBS volumes (D9-D — zombie candidates).
+        // Non-fatal: a failure here returns [] and the scan still completes
+        // with whatever EC2 data we have.
+        let ebsVolumes: Awaited<ReturnType<typeof listEbsVolumes>> = [];
+        try {
+          ebsVolumes = await listEbsVolumes(credentials, account.region);
+        } catch (err) {
+          console.error("[runScan] listEbsVolumes failed (non-fatal):", err);
+          ebsVolumes = [];
+        }
+
+        if (instances.length === 0 && ebsVolumes.length === 0) {
           await db
             .update(schema.runs)
             .set({
@@ -103,8 +115,11 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
           return { runId, status: "succeeded", totalFindings: 0, totalSavingsCents: 0 };
         }
 
-        // 4. Fetch CloudWatch metrics
-        const telemetry = await fetchInstanceTelemetry(credentials, instances);
+        // 4. Fetch CloudWatch metrics (only if we have EC2 instances)
+        const telemetry =
+          instances.length > 0
+            ? await fetchInstanceTelemetry(credentials, instances)
+            : [];
 
         // 5. Filter to instances with enough history for the engine
         const resources = telemetry
@@ -119,15 +134,27 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
             tags: t.tags,
           }));
 
-        if (resources.length === 0) {
-          // All instances are too new — no history yet
+        // Project EBS volumes into the engine payload. Field names mirror
+        // engine/main.py EbsVolumeIn — the engine derives hourly cost from
+        // (volume_type, size_gb) using its own EBS catalog. Python owns truth.
+        const ebs_volumes = ebsVolumes.map((v) => ({
+          volume_id: v.volumeId,
+          state: v.state,
+          size_gb: v.sizeGb,
+          volume_type: v.volumeType,
+          region: v.region,
+          create_time: v.createTime,
+        }));
+
+        if (resources.length === 0 && ebs_volumes.length === 0) {
+          // All instances are too new — no history yet, no zombie volumes either.
           await db
             .update(schema.runs)
             .set({
               finishedAt: new Date(),
               status: "succeeded",
               totalMonthlyWaste: "0",
-              resourceCount: instances.length,
+              resourceCount: instances.length + ebsVolumes.length,
               opportunityCount: 0,
             })
             .where(eq(schema.runs.id, runId));
@@ -139,7 +166,7 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
         }
 
         // 6. Call engine — Python owns all dollar math
-        const result = await analyze({ resources });
+        const result = await analyze({ resources, ebs_volumes });
 
         // 7. Persist opportunities — capture inserted IDs for enrichment
         const insertedOpps: { id: string; resourceId: string | null }[] =

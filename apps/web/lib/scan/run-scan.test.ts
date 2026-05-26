@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock AWS helpers
 vi.mock("@/lib/aws/assume-role", () => ({ assumeRole: vi.fn() }));
 vi.mock("@/lib/aws/ec2-lister", () => ({ listEc2Instances: vi.fn() }));
+vi.mock("@/lib/aws/ebs-lister", () => ({ listEbsVolumes: vi.fn() }));
 vi.mock("@/lib/aws/cloudwatch-fetcher", () => ({ fetchInstanceTelemetry: vi.fn() }));
 // Mock engine client
 vi.mock("@/lib/engine/client", () => ({ analyze: vi.fn() }));
@@ -36,6 +37,7 @@ vi.mock("@/lib/db", () => ({
 
 import { assumeRole } from "@/lib/aws/assume-role";
 import { listEc2Instances } from "@/lib/aws/ec2-lister";
+import { listEbsVolumes } from "@/lib/aws/ebs-lister";
 import { fetchInstanceTelemetry } from "@/lib/aws/cloudwatch-fetcher";
 import { analyze } from "@/lib/engine/client";
 import { db } from "@/lib/db";
@@ -110,6 +112,7 @@ beforeEach(() => {
 
   vi.mocked(assumeRole).mockResolvedValue(MOCK_CREDS);
   vi.mocked(listEc2Instances).mockResolvedValue(MOCK_INSTANCES);
+  vi.mocked(listEbsVolumes).mockResolvedValue([]);
   vi.mocked(fetchInstanceTelemetry).mockResolvedValue(MOCK_TELEMETRY);
   vi.mocked(analyze).mockResolvedValue(MOCK_ENGINE_RESULT);
 });
@@ -154,5 +157,83 @@ describe("runScan", () => {
     const result = await runScan(MOCK_ACCOUNT);
     expect(result.status).toBe("failed");
     expect(result.error).toContain("engine unreachable");
+  });
+
+  it("forwards EBS volumes to the engine payload (D9-D)", async () => {
+    vi.mocked(listEbsVolumes).mockResolvedValue([
+      {
+        volumeId: "vol-abc",
+        state: "available",
+        sizeGb: 500,
+        volumeType: "gp3",
+        region: "us-east-1",
+        createTime: "2026-01-01T00:00:00.000Z",
+        availabilityZone: "us-east-1a",
+      },
+    ]);
+
+    await runScan(MOCK_ACCOUNT);
+
+    expect(analyze).toHaveBeenCalledTimes(1);
+    const payload = vi.mocked(analyze).mock.calls[0]![0];
+    expect(payload.ebs_volumes).toEqual([
+      {
+        volume_id: "vol-abc",
+        state: "available",
+        size_gb: 500,
+        volume_type: "gp3",
+        region: "us-east-1",
+        create_time: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("still scans when only EBS volumes are present (no EC2)", async () => {
+    vi.mocked(listEc2Instances).mockResolvedValue([]);
+    vi.mocked(listEbsVolumes).mockResolvedValue([
+      {
+        volumeId: "vol-orphan",
+        state: "available",
+        sizeGb: 200,
+        volumeType: "gp2",
+        region: "us-east-1",
+        createTime: "2026-01-01T00:00:00.000Z",
+        availabilityZone: "us-east-1a",
+      },
+    ]);
+    vi.mocked(analyze).mockResolvedValue({
+      resource_count: 1,
+      opportunity_count: 1,
+      total_monthly_waste: 20,
+      opportunities: [
+        {
+          kind: "zombie" as const,
+          resource_id: "vol-orphan",
+          resource_type: "ebs:gp2",
+          monthly_cost: 20,
+          monthly_savings: 20,
+          zombie_label: "stopped" as const,
+          max_cpu_pct: 0,
+          data_days: 8,
+          confidence: 1.0,
+          risk: 0.0,
+        },
+      ],
+    });
+
+    const result = await runScan(MOCK_ACCOUNT);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.totalFindings).toBe(1);
+    expect(analyze).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns succeeded with 0 findings when neither EC2 nor EBS present", async () => {
+    vi.mocked(listEc2Instances).mockResolvedValue([]);
+    vi.mocked(listEbsVolumes).mockResolvedValue([]);
+
+    const result = await runScan(MOCK_ACCOUNT);
+    expect(result.status).toBe("succeeded");
+    expect(analyze).not.toHaveBeenCalled();
   });
 });

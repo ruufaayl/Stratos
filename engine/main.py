@@ -23,11 +23,26 @@ from pydantic import BaseModel, Field
 
 from . import __version__, fixtures
 from .anomaly import detect_cost_anomalies
+from .catalog import HOURS_PER_MONTH
 from .forecast import forecast_spend
 from .idle import find_idle, idle_score
 from .models import ResourceTelemetry
 from .rightsizing import find_rightsizing, recommend_rightsizing
-from .zombie import zombie_score, find_zombies
+from .zombie import zombie_score, find_zombies, SAMPLES_PER_DAY
+
+# EBS pricing snapshot — USD per GB-month, us-east-1, Jan 2026 reference.
+# Source: aws.amazon.com/ebs/pricing. The engine owns this catalog so the
+# TS side does no dollar arithmetic (architecture law).
+EBS_GB_MONTH_USD: dict[str, float] = {
+    "gp3":      0.080,
+    "gp2":      0.100,
+    "io1":      0.125,
+    "io2":      0.125,
+    "st1":      0.045,
+    "sc1":      0.015,
+    "standard": 0.050,
+}
+EBS_DEFAULT_GB_MONTH_USD = 0.100  # gp2 rate — sensible fallback
 
 STARTED_AT = time.time()
 
@@ -68,10 +83,30 @@ class TelemetryIn(BaseModel):
     tags: dict[str, str] = Field(default_factory=dict)
 
 
+class EbsVolumeIn(BaseModel):
+    """An unattached EBS volume (zombie candidate).
+
+    Unattached volumes by definition have zero utilization — every dollar
+    billed for them is waste. We synthesize zero-CPU telemetry and dispatch
+    through the existing zombie pipeline so the math path stays unified.
+    """
+
+    volume_id: str
+    state: str = "available"  # "available" | "error" | ...
+    size_gb: float
+    volume_type: str = "gp2"  # "gp3" | "gp2" | "io1" | "io2" | "st1" | "sc1"
+    region: str = "us-east-1"
+    create_time: str | None = None
+
+
 class AnalyzeRequest(BaseModel):
     resources: list[TelemetryIn]
     daily_cost: list[float] | None = Field(
         None, description="Optional daily-spend series for anomaly detection"
+    )
+    ebs_volumes: list[EbsVolumeIn] = Field(
+        default_factory=list,
+        description="Unattached EBS volumes to scan for zombie waste",
     )
 
 
@@ -128,6 +163,41 @@ def _to_telemetry(t: TelemetryIn) -> ResourceTelemetry:
     )
 
 
+# Span just over zombie's MIN_DAYS_COVERAGE so the heuristic accepts it.
+_EBS_SAMPLE_DAYS = 8
+_EBS_SAMPLES = _EBS_SAMPLE_DAYS * SAMPLES_PER_DAY
+
+
+def _ebs_hourly_cost(volume_type: str, size_gb: float) -> float:
+    """Convert (type, size) into hourly USD using the EBS catalog above."""
+    gb_month = EBS_GB_MONTH_USD.get(volume_type.lower(), EBS_DEFAULT_GB_MONTH_USD)
+    monthly = gb_month * size_gb
+    if HOURS_PER_MONTH <= 0:
+        return 0.0
+    return monthly / HOURS_PER_MONTH
+
+
+def _ebs_to_telemetry(v: EbsVolumeIn) -> ResourceTelemetry:
+    """Project an unattached EBS volume as zero-utilization telemetry.
+
+    The zombie heuristic flags max_cpu == 0 with sufficient coverage as a
+    definite zombie — exactly what an unattached volume is by definition.
+    """
+    return ResourceTelemetry(
+        resource_id=v.volume_id,
+        service="EBS",
+        resource_type=f"ebs:{v.volume_type}",
+        region=v.region,
+        cpu=np.zeros(_EBS_SAMPLES, dtype=float),
+        hourly_cost=_ebs_hourly_cost(v.volume_type, v.size_gb),
+        tags={
+            "size_gb": str(v.size_gb),
+            "state": v.state,
+            "volume_type": v.volume_type,
+        },
+    )
+
+
 @app.post("/analyze", tags=["analysis"])
 def analyze(req: AnalyzeRequest) -> dict[str, Any]:
     """Run the full ranked-opportunity pipeline against a fleet.
@@ -139,8 +209,11 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
 
     Output is sorted by monthly_savings descending — the dollar headline rules.
     """
-    if not req.resources:
-        raise HTTPException(status_code=400, detail="resources must not be empty")
+    if not req.resources and not req.ebs_volumes:
+        raise HTTPException(
+            status_code=400,
+            detail="resources or ebs_volumes must not be empty",
+        )
 
     fleet = [_to_telemetry(r) for r in req.resources]
 
@@ -154,6 +227,16 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
         if opp is not None:
             opportunities.append(opp)
             zombie_ids.add(t.resource_id)
+
+    # EBS unattached volumes — synthetic zero-CPU telemetry → zombie pipeline.
+    # Volumes never participate in idle/rightsize: they aren't compute.
+    ebs_count = 0
+    for vol in req.ebs_volumes:
+        ebs_telem = _ebs_to_telemetry(vol)
+        ebs_count += 1
+        opp = zombie_score(ebs_telem)
+        if opp is not None:
+            opportunities.append(opp)
 
     idle_ids: set[str] = set()
     for t in fleet:
@@ -182,7 +265,7 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
     )
 
     return {
-        "resource_count": len(fleet),
+        "resource_count": len(fleet) + ebs_count,
         "opportunity_count": len(opportunities),
         "total_monthly_waste": total_monthly_waste,
         "opportunities": opportunities,

@@ -100,8 +100,22 @@ export const telemetryIn = z.object({
 
 export type TelemetryIn = z.infer<typeof telemetryIn>;
 
+// Unattached EBS volume payload (D9-D). The engine projects each one as
+// zero-CPU telemetry into the zombie pipeline; we never compute dollars here.
+export const ebsVolumeIn = z.object({
+  volume_id: z.string(),
+  state: z.string().default("available"),
+  size_gb: z.number(),
+  volume_type: z.string().default("gp2"),
+  region: z.string().default("us-east-1"),
+  create_time: z.string().nullable().optional(),
+});
+
+export type EbsVolumeIn = z.infer<typeof ebsVolumeIn>;
+
 export const analyzeRequest = z.object({
   resources: z.array(telemetryIn),
   daily_cost: z.array(z.number()).optional(),
+  ebs_volumes: z.array(ebsVolumeIn).optional(),
 });
 export type AnalyzeRequest = z.infer<typeof analyzeRequest>;
