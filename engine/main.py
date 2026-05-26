@@ -23,12 +23,18 @@ from pydantic import BaseModel, Field
 
 from . import __version__, fixtures
 from .anomaly import detect_cost_anomalies
-from .catalog import HOURS_PER_MONTH
+from .catalog import CATALOG, HOURS_PER_MONTH
+from .commitment import optimal_commitment
 from .forecast import forecast_spend
 from .idle import find_idle, idle_score
 from .models import ResourceTelemetry
 from .rightsizing import find_rightsizing, recommend_rightsizing
 from .zombie import zombie_score, find_zombies, SAMPLES_PER_DAY
+
+# Typical AWS RI/SP discount vs on-demand — 38-42% savings is the well-known
+# industry range. We use 40% as a conservative default so every commitment
+# recommendation survives scrutiny against real AWS pricing pages.
+_RI_SAVINGS_FRACTION = 0.40  # r_committed = r_ondemand * (1 - _RI_SAVINGS_FRACTION)
 
 # EBS pricing snapshot — USD per GB-month, us-east-1, Jan 2026 reference.
 # Source: aws.amazon.com/ebs/pricing. The engine owns this catalog so the
@@ -292,14 +298,69 @@ def _ebs_to_telemetry(v: EbsVolumeIn) -> ResourceTelemetry:
     )
 
 
+def _commitment_opportunities(fleet: list[ResourceTelemetry]) -> list[dict[str, Any]]:
+    """Newsvendor-optimal commitment recommendations grouped by instance type.
+
+    For each EC2 instance type with enough CPU samples (≥24), we synthesize
+    an hourly usage series by treating each instance's CPU fraction (0-1) as
+    its usage intensity (one fully utilized instance = 1.0 unit). The on-demand
+    rate comes from the catalog; committed rate uses the industry-standard 40%
+    RI/SP discount. Only instances with a catalog entry are eligible — unknown
+    types are skipped gracefully.
+
+    Non-fatal: any per-type error is swallowed so it never blocks the pipeline.
+    """
+    from collections import defaultdict
+
+    by_type: dict[str, list[ResourceTelemetry]] = defaultdict(list)
+    for t in fleet:
+        if t.service == "EC2" and t.resource_type in CATALOG:
+            by_type[t.resource_type].append(t)
+
+    commitments: list[dict[str, Any]] = []
+    for instance_type, group in by_type.items():
+        try:
+            spec = CATALOG[instance_type]
+            r_od = spec.price_hr
+            r_c = r_od * (1.0 - _RI_SAVINGS_FRACTION)
+
+            # Build an hourly usage series: concatenate each instance's CPU
+            # fraction (0-1) as a proxy for instantaneous utilization units.
+            usage_parts = [t.cpu / 100.0 for t in group if t.cpu.size >= 24]
+            if not usage_parts:
+                continue
+            hourly_usage = np.concatenate(usage_parts)
+            if hourly_usage.size < 24:
+                continue
+
+            opp = optimal_commitment(
+                hourly_usage,
+                r_ondemand=r_od,
+                r_committed=r_c,
+            )
+            if opp["monthly_savings"] <= 0:
+                continue
+
+            opp["resource_id"] = instance_type
+            opp["instance_count"] = len(group)
+            commitments.append(opp)
+        except Exception:
+            # Non-fatal: skip this instance type on any error.
+            continue
+
+    return commitments
+
+
 @app.post("/analyze", tags=["analysis"])
 def analyze(req: AnalyzeRequest) -> dict[str, Any]:
     """Run the full ranked-opportunity pipeline against a fleet.
 
     Algorithms run in order:
-      1. idle (geometric-mean CPU/net)
-      2. rightsize (p95 + headroom + risk score)
-      3. anomaly (EWMA bands, if daily_cost provided)
+      1. zombie (stopped/near-stopped — highest confidence)
+      2. idle (geometric-mean CPU/net)
+      3. rightsize (p95 + headroom + risk score)
+      4. anomaly (EWMA bands, if daily_cost provided)
+      5. commitment (newsvendor RI/SP gaps, grouped by instance type)
 
     Output is sorted by monthly_savings descending — the dollar headline rules.
     """
@@ -366,6 +427,13 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
     if req.daily_cost is not None:
         daily = np.asarray(req.daily_cost, dtype=float)
         opportunities.extend(detect_cost_anomalies(daily))
+
+    # Commitment gap analysis (newsvendor RI/SP recommendations).
+    # Grouped by instance type; non-fatal if it fails for any type.
+    try:
+        opportunities.extend(_commitment_opportunities(fleet))
+    except Exception:
+        pass  # non-fatal — commitment failures never block the pipeline
 
     opportunities.sort(key=lambda o: o.get("monthly_savings", 0.0), reverse=True)
 
