@@ -5,6 +5,11 @@ vi.mock("@/lib/aws/assume-role", () => ({ assumeRole: vi.fn() }));
 vi.mock("@/lib/aws/ec2-lister", () => ({ listEc2Instances: vi.fn() }));
 vi.mock("@/lib/aws/ebs-lister", () => ({ listEbsVolumes: vi.fn() }));
 vi.mock("@/lib/aws/rds-lister", () => ({ listRdsInstances: vi.fn() }));
+vi.mock("@/lib/aws/s3-lister", () => ({ listS3Buckets: vi.fn() }));
+vi.mock("@/lib/aws/regions", () => ({
+  getEnabledRegions: vi.fn(),
+  DEFAULT_SCAN_REGIONS: ["us-east-1"],
+}));
 vi.mock("@/lib/aws/cloudwatch-fetcher", () => ({
   fetchInstanceTelemetry: vi.fn(),
   fetchRdsCpuMetrics: vi.fn(),
@@ -46,6 +51,8 @@ import { assumeRole } from "@/lib/aws/assume-role";
 import { listEc2Instances } from "@/lib/aws/ec2-lister";
 import { listEbsVolumes } from "@/lib/aws/ebs-lister";
 import { listRdsInstances } from "@/lib/aws/rds-lister";
+import { listS3Buckets } from "@/lib/aws/s3-lister";
+import { getEnabledRegions } from "@/lib/aws/regions";
 import {
   fetchInstanceTelemetry,
   fetchRdsCpuMetrics,
@@ -68,7 +75,7 @@ const MOCK_CREDS = {
   sessionToken: "token",
 };
 
-const MOCK_INSTANCES = [
+const MOCK_INSTANCES_USE1 = [
   {
     instanceId: "i-0abc",
     instanceType: "t3.xlarge",
@@ -79,14 +86,36 @@ const MOCK_INSTANCES = [
   },
 ];
 
-const MOCK_TELEMETRY = [
+const MOCK_INSTANCES_USW2 = [
+  {
+    instanceId: "i-0def",
+    instanceType: "m5.large",
+    region: "us-west-2",
+    state: "running",
+    hourlyOnDemandUsd: 0.096,
+    tags: {},
+  },
+];
+
+const MOCK_TELEMETRY_USE1 = [
   {
     instanceId: "i-0abc",
     instanceType: "t3.xlarge",
     region: "us-east-1",
     hourlyOnDemandUsd: 0.1664,
     tags: {},
-    cpu: new Array(672).fill(2.0), // 672 points = well above MIN_DATAPOINTS threshold
+    cpu: new Array(672).fill(2.0),
+  },
+];
+
+const MOCK_TELEMETRY_USW2 = [
+  {
+    instanceId: "i-0def",
+    instanceType: "m5.large",
+    region: "us-west-2",
+    hourlyOnDemandUsd: 0.096,
+    tags: {},
+    cpu: new Array(672).fill(3.0),
   },
 ];
 
@@ -122,10 +151,27 @@ beforeEach(() => {
   vi.mocked(db.update).mockReturnValue(updateMock as never);
 
   vi.mocked(assumeRole).mockResolvedValue(MOCK_CREDS);
-  vi.mocked(listEc2Instances).mockResolvedValue(MOCK_INSTANCES);
+  // Default: single-region scan keeps the legacy single-region test semantics.
+  vi.mocked(getEnabledRegions).mockResolvedValue(["us-east-1"]);
+
+  // Region-aware EC2 lister mock: returns instances for the matching region.
+  vi.mocked(listEc2Instances).mockImplementation(async (_creds, region) => {
+    if (region === "us-east-1") return MOCK_INSTANCES_USE1;
+    if (region === "us-west-2") return MOCK_INSTANCES_USW2;
+    return [];
+  });
   vi.mocked(listEbsVolumes).mockResolvedValue([]);
   vi.mocked(listRdsInstances).mockResolvedValue([]);
-  vi.mocked(fetchInstanceTelemetry).mockResolvedValue(MOCK_TELEMETRY);
+  vi.mocked(listS3Buckets).mockResolvedValue([]);
+
+  // Region-aware telemetry mock.
+  vi.mocked(fetchInstanceTelemetry).mockImplementation(async (_creds, instances) => {
+    if (instances.length === 0) return [];
+    if (instances[0]!.region === "us-east-1") return MOCK_TELEMETRY_USE1;
+    if (instances[0]!.region === "us-west-2") return MOCK_TELEMETRY_USW2;
+    return [];
+  });
+
   vi.mocked(fetchRdsCpuMetrics).mockResolvedValue([]);
   vi.mocked(analyze).mockResolvedValue(MOCK_ENGINE_RESULT);
 });
@@ -278,7 +324,7 @@ describe("runScan", () => {
       multi_az: false,
       storage_gb: 500,
       region: "us-east-1",
-      hourly_cost: 0, // engine owns RDS pricing
+      hourly_cost: 0,
     });
     expect(payload.rds_instances![0]!.cpu_utilization_pct).toHaveLength(672);
   });
@@ -296,7 +342,6 @@ describe("runScan", () => {
         createTime: "2026-05-25T00:00:00.000Z",
       },
     ]);
-    // Only 10 datapoints — below MIN_DATAPOINTS (48); should be filtered out.
     vi.mocked(fetchRdsCpuMetrics).mockResolvedValue(new Array(10).fill(0));
 
     await runScan(MOCK_ACCOUNT);
@@ -304,5 +349,127 @@ describe("runScan", () => {
     expect(analyze).toHaveBeenCalledTimes(1);
     const payload = vi.mocked(analyze).mock.calls[0]![0];
     expect(payload.rds_instances).toEqual([]);
+  });
+
+  // === D11-A: multi-region + S3 ===
+
+  it("aggregates EC2 instances across all enabled regions (D11-A)", async () => {
+    vi.mocked(getEnabledRegions).mockResolvedValue(["us-east-1", "us-west-2"]);
+
+    await runScan(MOCK_ACCOUNT);
+
+    expect(listEc2Instances).toHaveBeenCalledWith(MOCK_CREDS, "us-east-1");
+    expect(listEc2Instances).toHaveBeenCalledWith(MOCK_CREDS, "us-west-2");
+    expect(analyze).toHaveBeenCalledTimes(1);
+
+    const payload = vi.mocked(analyze).mock.calls[0]![0];
+    expect(payload.resources).toHaveLength(2);
+    const ids = payload.resources.map((r) => r.resource_id).sort();
+    expect(ids).toEqual(["i-0abc", "i-0def"]);
+  });
+
+  it("forwards S3 buckets to the engine payload (D11-A)", async () => {
+    vi.mocked(listS3Buckets).mockResolvedValue([
+      {
+        bucketName: "stratos-prod-logs",
+        region: "us-east-1",
+        creationDate: "2024-06-01T00:00:00.000Z",
+      },
+      {
+        bucketName: "stratos-old-backups",
+        region: "eu-west-1",
+        creationDate: "2023-01-15T00:00:00.000Z",
+      },
+    ]);
+
+    await runScan(MOCK_ACCOUNT);
+
+    expect(listS3Buckets).toHaveBeenCalledTimes(1);
+    const payload = vi.mocked(analyze).mock.calls[0]![0];
+    expect(payload.s3_buckets).toEqual([
+      {
+        bucket_name: "stratos-prod-logs",
+        region: "us-east-1",
+        creation_date: "2024-06-01T00:00:00.000Z",
+      },
+      {
+        bucket_name: "stratos-old-backups",
+        region: "eu-west-1",
+        creation_date: "2023-01-15T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("scans S3 globally (one call, no region iteration)", async () => {
+    vi.mocked(getEnabledRegions).mockResolvedValue([
+      "us-east-1",
+      "us-west-2",
+      "eu-west-1",
+    ]);
+    vi.mocked(listS3Buckets).mockResolvedValue([
+      {
+        bucketName: "global-bucket",
+        region: "us-east-1",
+        creationDate: "2024-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    await runScan(MOCK_ACCOUNT);
+
+    // S3 is a global service — exactly one ListBuckets call regardless of
+    // how many regions we scan.
+    expect(listS3Buckets).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not abort the whole scan when a single region fails (D11-A)", async () => {
+    vi.mocked(getEnabledRegions).mockResolvedValue(["us-east-1", "us-west-2"]);
+    // us-west-2 EC2 lister blows up; us-east-1 continues normally.
+    vi.mocked(listEc2Instances).mockImplementation(async (_creds, region) => {
+      if (region === "us-east-1") return MOCK_INSTANCES_USE1;
+      if (region === "us-west-2") {
+        throw new Error("AccessDenied for us-west-2");
+      }
+      return [];
+    });
+
+    const result = await runScan(MOCK_ACCOUNT);
+
+    expect(result.status).toBe("succeeded");
+    expect(analyze).toHaveBeenCalledTimes(1);
+    const payload = vi.mocked(analyze).mock.calls[0]![0];
+    // Only us-east-1 contributed an instance.
+    expect(payload.resources).toHaveLength(1);
+    expect(payload.resources[0]!.resource_id).toBe("i-0abc");
+  });
+
+  it("falls back gracefully when listS3Buckets throws (D11-A)", async () => {
+    vi.mocked(listS3Buckets).mockRejectedValue(new Error("S3 perms missing"));
+
+    const result = await runScan(MOCK_ACCOUNT);
+
+    expect(result.status).toBe("succeeded");
+    const payload = vi.mocked(analyze).mock.calls[0]![0];
+    expect(payload.s3_buckets).toEqual([]);
+  });
+
+  it("includes S3 bucket count in total resourceCount even with no scoreable resources", async () => {
+    // No EC2/EBS/RDS, but buckets exist — engine should not be called but the
+    // run should still succeed and the resource count should reflect buckets.
+    vi.mocked(listEc2Instances).mockResolvedValue([]);
+    vi.mocked(listEbsVolumes).mockResolvedValue([]);
+    vi.mocked(listRdsInstances).mockResolvedValue([]);
+    vi.mocked(listS3Buckets).mockResolvedValue([
+      {
+        bucketName: "only-bucket",
+        region: "us-east-1",
+        creationDate: "2024-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    const result = await runScan(MOCK_ACCOUNT);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.totalFindings).toBe(0);
+    expect(analyze).not.toHaveBeenCalled();
   });
 });

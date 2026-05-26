@@ -21,6 +21,8 @@
     "@aws-sdk/client-cloudwatch": "^3.1053.0",
     "@aws-sdk/client-cost-explorer": "^3.1053.0",
     "@aws-sdk/client-ec2": "^3.1053.0",
+    "@aws-sdk/client-rds": "^3.1053.0",
+    "@aws-sdk/client-s3": "^3.1053.0",
     "@aws-sdk/client-sts": "^3.1053.0",
     "@clerk/elements": "^0.24.13",
     "@clerk/nextjs": "^6.9.0",

@@ -4,15 +4,19 @@
  * Sequence:
  *   1. Create runs row (status: "running")
  *   2. Assume IAM role
- *   3. List EC2 instances in account's region
- *   4. Fetch 14-day CloudWatch CPU metrics
- *   5. Filter to instances with ≥48 datapoints (≥1 day at 30-min resolution)
- *   6. POST telemetry to engine /analyze
- *   7. Persist opportunities to DB
- *   8. Mark run succeeded + update account.lastScanAt
+ *   3. Enumerate enabled regions (DescribeRegions, fallback to DEFAULT_SCAN_REGIONS)
+ *   4. For each region (3 in parallel): list EC2 + EBS + RDS, fetch CloudWatch
+ *   5. List S3 buckets globally (one call, no region iteration)
+ *   6. Filter to resources with ≥48 CW datapoints (≥1 day at 30-min resolution)
+ *   7. POST aggregated telemetry to engine /analyze
+ *   8. Persist opportunities to DB
+ *   9. Mark run succeeded + update account.lastScanAt
  *
  * A 120-second timeout guards against hanging AWS calls.
  * On timeout or any error: run row is marked "failed".
+ *
+ * Region failures are non-fatal: a single region erroring (throttle, permission,
+ * partition outage) is logged and the scan continues with the remaining regions.
  *
  * ARCHITECTURE LAW: Python engine owns all dollar arithmetic.
  *                   This function feeds input and persists output only.
@@ -25,6 +29,14 @@ import { assumeRole } from "@/lib/aws/assume-role";
 import { listEc2Instances } from "@/lib/aws/ec2-lister";
 import { listEbsVolumes } from "@/lib/aws/ebs-lister";
 import { listRdsInstances } from "@/lib/aws/rds-lister";
+import { listS3Buckets } from "@/lib/aws/s3-lister";
+import { getEnabledRegions } from "@/lib/aws/regions";
+import type { AwsCredentials } from "@/lib/aws/assume-role";
+import type { Ec2InstanceInfo } from "@/lib/aws/ec2-lister";
+import type { EbsVolumeRecord } from "@/lib/aws/ebs-lister";
+import type { RdsInstanceRecord } from "@/lib/aws/rds-lister";
+import type { S3BucketRecord } from "@/lib/aws/s3-lister";
+import type { InstanceTelemetry } from "@/lib/aws/cloudwatch-fetcher";
 import {
   fetchInstanceTelemetry,
   fetchRdsCpuMetrics,
@@ -36,7 +48,7 @@ export interface ScanInput {
   orgId: string;
   roleArn: string;
   externalId: string;
-  region: string;
+  region: string;   // preferred region (used to bootstrap DescribeRegions)
 }
 
 export interface ScanResult {
@@ -50,12 +62,104 @@ export interface ScanResult {
 const SCAN_TIMEOUT_MS = 120_000;
 /** Minimum datapoints required to feed the engine (1 day at 30-min resolution). */
 const MIN_DATAPOINTS = 48;
+/** Cap on simultaneous region scans — AWS rate-limits per region but the
+ *  cumulative request fan-out across 10+ regions can throttle STS/CW. */
+const REGION_CONCURRENCY = 3;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   const timeout = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error(`Scan timed out after ${ms / 1000}s`)), ms),
   );
   return Promise.race([promise, timeout]);
+}
+
+/**
+ * Process `items` in chunks of `size`, awaiting all promises in a chunk before
+ * starting the next. Used to cap concurrent AWS region scans.
+ */
+async function chunked<T, R>(
+  items: T[],
+  size: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += size) {
+    const slice = items.slice(i, i + size);
+    const chunkResults = await Promise.all(slice.map(fn));
+    results.push(...chunkResults);
+  }
+  return results;
+}
+
+/**
+ * Per-region scan result. Any field can be empty if the underlying AWS call
+ * failed — failures are swallowed at this level so the multi-region rollup
+ * never aborts on a single region.
+ */
+interface RegionScanResult {
+  region: string;
+  instances: Ec2InstanceInfo[];
+  ebsVolumes: EbsVolumeRecord[];
+  rdsInstances: RdsInstanceRecord[];
+  telemetry: InstanceTelemetry[];
+  rdsCpu: number[][];
+}
+
+async function scanRegion(
+  credentials: AwsCredentials,
+  region: string,
+): Promise<RegionScanResult> {
+  const result: RegionScanResult = {
+    region,
+    instances: [],
+    ebsVolumes: [],
+    rdsInstances: [],
+    telemetry: [],
+    rdsCpu: [],
+  };
+
+  try {
+    result.instances = await listEc2Instances(credentials, region);
+  } catch (err) {
+    console.error(`[runScan][${region}] listEc2Instances failed (non-fatal):`, err);
+  }
+
+  try {
+    result.ebsVolumes = await listEbsVolumes(credentials, region);
+  } catch (err) {
+    console.error(`[runScan][${region}] listEbsVolumes failed (non-fatal):`, err);
+  }
+
+  try {
+    result.rdsInstances = await listRdsInstances(credentials, region);
+  } catch (err) {
+    console.error(`[runScan][${region}] listRdsInstances failed (non-fatal):`, err);
+  }
+
+  // Fetch CloudWatch only where we have resources to score.
+  if (result.instances.length > 0) {
+    try {
+      result.telemetry = await fetchInstanceTelemetry(credentials, result.instances);
+    } catch (err) {
+      console.error(`[runScan][${region}] fetchInstanceTelemetry failed (non-fatal):`, err);
+    }
+  }
+
+  if (result.rdsInstances.length > 0) {
+    try {
+      const cwClient = new CloudWatchClient({ region, credentials });
+      result.rdsCpu = await Promise.all(
+        result.rdsInstances.map((inst) =>
+          fetchRdsCpuMetrics(cwClient, inst.instanceId, 14),
+        ),
+      );
+    } catch (err) {
+      console.error(`[runScan][${region}] fetchRdsCpuMetrics failed (non-fatal):`, err);
+      result.rdsCpu = result.rdsInstances.map(() => []);
+    }
+  }
+
+  return result;
 }
 
 export async function runScan(account: ScanInput): Promise<ScanResult> {
@@ -88,37 +192,48 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
           "StratosScan",
         );
 
-        // 3. List EC2 instances
-        const instances = await listEc2Instances(credentials, account.region);
+        // 3. Enumerate regions (best-effort, fallback to DEFAULT_SCAN_REGIONS)
+        const regions = await getEnabledRegions(credentials, account.region);
 
-        // 3b. List unattached EBS volumes (D9-D — zombie candidates).
-        // Non-fatal: a failure here returns [] and the scan still completes
-        // with whatever EC2 data we have.
-        let ebsVolumes: Awaited<ReturnType<typeof listEbsVolumes>> = [];
-        try {
-          ebsVolumes = await listEbsVolumes(credentials, account.region);
-        } catch (err) {
-          console.error("[runScan] listEbsVolumes failed (non-fatal):", err);
-          ebsVolumes = [];
+        // 4. Scan all regions, chunked to cap concurrency
+        const regionResults = await chunked(regions, REGION_CONCURRENCY, (r) =>
+          scanRegion(credentials, r),
+        );
+
+        // Aggregate across regions
+        const allInstances: Ec2InstanceInfo[] = [];
+        const allEbsVolumes: EbsVolumeRecord[] = [];
+        const allRdsInstances: RdsInstanceRecord[] = [];
+        const allTelemetry: InstanceTelemetry[] = [];
+        // Pair each RDS instance with its CPU array. We flatten with the same
+        // ordering as allRdsInstances so the indices stay aligned downstream.
+        const allRdsCpu: number[][] = [];
+
+        for (const r of regionResults) {
+          allInstances.push(...r.instances);
+          allEbsVolumes.push(...r.ebsVolumes);
+          allRdsInstances.push(...r.rdsInstances);
+          allTelemetry.push(...r.telemetry);
+          allRdsCpu.push(...r.rdsCpu);
         }
 
-        // 3c. List RDS instances (D10-B — idle DB candidates).
-        // Non-fatal: idle RDS is one of the biggest waste lines we can find,
-        // but a permissions issue on rds:DescribeDBInstances must never sink
-        // the whole scan.
-        let rdsInstances: Awaited<ReturnType<typeof listRdsInstances>> = [];
+        // 5. List S3 buckets — global service, one call regardless of region.
+        // Non-fatal: returns [] on any error (already handled inside the lister).
+        let s3Buckets: S3BucketRecord[] = [];
         try {
-          rdsInstances = await listRdsInstances(credentials, account.region);
+          s3Buckets = await listS3Buckets(credentials);
         } catch (err) {
-          console.error("[runScan] listRdsInstances failed (non-fatal):", err);
-          rdsInstances = [];
+          console.error("[runScan] listS3Buckets failed (non-fatal):", err);
+          s3Buckets = [];
         }
 
-        if (
-          instances.length === 0 &&
-          ebsVolumes.length === 0 &&
-          rdsInstances.length === 0
-        ) {
+        const totalResourcesEnumerated =
+          allInstances.length +
+          allEbsVolumes.length +
+          allRdsInstances.length +
+          s3Buckets.length;
+
+        if (totalResourcesEnumerated === 0) {
           await db
             .update(schema.runs)
             .set({
@@ -136,31 +251,8 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
           return { runId, status: "succeeded", totalFindings: 0, totalSavingsCents: 0 };
         }
 
-        // 4. Fetch CloudWatch metrics (only if we have EC2 instances)
-        const telemetry =
-          instances.length > 0
-            ? await fetchInstanceTelemetry(credentials, instances)
-            : [];
-
-        // 4b. Fetch RDS CPU metrics in parallel (D10-B).
-        // Same 30-min Average pattern as EC2. A per-instance failure returns
-        // [] for that instance — the engine will simply skip it (idle.detect
-        // requires ≥1 CPU sample).
-        const cwClient = new CloudWatchClient({
-          region: account.region,
-          credentials,
-        });
-        const rdsCpuArrays =
-          rdsInstances.length > 0
-            ? await Promise.all(
-                rdsInstances.map((inst) =>
-                  fetchRdsCpuMetrics(cwClient, inst.instanceId, 14),
-                ),
-              )
-            : [];
-
-        // 5. Filter to instances with enough history for the engine
-        const resources = telemetry
+        // 6. Project + filter for the engine
+        const resources = allTelemetry
           .filter((t) => t.cpu.length >= MIN_DATAPOINTS)
           .map((t) => ({
             resource_id: t.instanceId,
@@ -175,7 +267,7 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
         // Project EBS volumes into the engine payload. Field names mirror
         // engine/main.py EbsVolumeIn — the engine derives hourly cost from
         // (volume_type, size_gb) using its own EBS catalog. Python owns truth.
-        const ebs_volumes = ebsVolumes.map((v) => ({
+        const ebs_volumes = allEbsVolumes.map((v) => ({
           volume_id: v.volumeId,
           state: v.state,
           size_gb: v.sizeGb,
@@ -187,9 +279,7 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
         // Project RDS instances into the engine payload (D10-B). We pass
         // hourly_cost: 0 here — the engine owns the RDS pricing catalog and
         // applies it from instance_class. Architecture law: Python owns truth.
-        // TODO: use RDS pricing (mirror an RDS catalog on the TS side once we
-        // need pre-engine cost previews).
-        const rds_instances = rdsInstances
+        const rds_instances = allRdsInstances
           .map((inst, i) => ({
             instance_id: inst.instanceId,
             instance_class: inst.instanceClass,
@@ -197,25 +287,34 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
             multi_az: inst.multiAz,
             storage_gb: inst.storageGb,
             region: inst.region,
-            cpu_utilization_pct: rdsCpuArrays[i] ?? [],
+            cpu_utilization_pct: allRdsCpu[i] ?? [],
             hourly_cost: 0,
           }))
           .filter((r) => r.cpu_utilization_pct.length >= MIN_DATAPOINTS);
+
+        // Project S3 buckets — future-proofing. Engine may or may not consume
+        // these today; the payload key is `s3_buckets` and matches the Zod
+        // schema in lib/engine/types.ts.
+        const s3_buckets = s3Buckets.map((b) => ({
+          bucket_name: b.bucketName,
+          region: b.region,
+          creation_date: b.creationDate,
+        }));
 
         if (
           resources.length === 0 &&
           ebs_volumes.length === 0 &&
           rds_instances.length === 0
         ) {
-          // All resources are too new (no history) or absent — nothing to score.
+          // No scoreable resources (S3 buckets are enumerated but not yet
+          // scored by the engine — they don't count as a finding source).
           await db
             .update(schema.runs)
             .set({
               finishedAt: new Date(),
               status: "succeeded",
               totalMonthlyWaste: "0",
-              resourceCount:
-                instances.length + ebsVolumes.length + rdsInstances.length,
+              resourceCount: totalResourcesEnumerated,
               opportunityCount: 0,
             })
             .where(eq(schema.runs.id, runId));
@@ -226,10 +325,15 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
           return { runId, status: "succeeded", totalFindings: 0, totalSavingsCents: 0 };
         }
 
-        // 6. Call engine — Python owns all dollar math
-        const result = await analyze({ resources, ebs_volumes, rds_instances });
+        // 7. Call engine — Python owns all dollar math
+        const result = await analyze({
+          resources,
+          ebs_volumes,
+          rds_instances,
+          s3_buckets,
+        });
 
-        // 7. Persist opportunities — capture inserted IDs for enrichment
+        // 8. Persist opportunities — capture inserted IDs for enrichment
         const insertedOpps: { id: string; resourceId: string | null }[] =
           result.opportunities.length > 0
             ? await db
@@ -256,14 +360,22 @@ export async function runScan(account: ScanInput): Promise<ScanResult> {
 
         const totalSavingsCents = Math.round(result.total_monthly_waste * 100);
 
-        // 8. Mark run succeeded + update account
+        // The engine reports resource_count for resources it actually scored.
+        // We report resourceCount as the full enumeration across all regions
+        // + S3 — this is what the user sees as "we looked at N resources".
+        const reportedResourceCount = Math.max(
+          result.resource_count,
+          totalResourcesEnumerated,
+        );
+
+        // 9. Mark run succeeded + update account
         await db
           .update(schema.runs)
           .set({
             finishedAt: new Date(),
             status: "succeeded",
             totalMonthlyWaste: String(result.total_monthly_waste),
-            resourceCount: result.resource_count,
+            resourceCount: reportedResourceCount,
             opportunityCount: result.opportunity_count,
             engineRaw: result as Record<string, unknown>,
           })

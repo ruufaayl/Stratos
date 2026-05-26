@@ -130,10 +130,22 @@ export const rdsInstanceIn = z.object({
 
 export type RdsInstanceIn = z.infer<typeof rdsInstanceIn>;
 
+// S3 bucket payload (D11-A). Future-proofing for zombie-bucket detection:
+// the engine will eventually score buckets by last-modified-object age and
+// storage class. For now we just plumb the metadata through.
+export const s3BucketIn = z.object({
+  bucket_name: z.string(),
+  region: z.string().default("us-east-1"),
+  creation_date: z.string(),
+});
+
+export type S3BucketIn = z.infer<typeof s3BucketIn>;
+
 export const analyzeRequest = z.object({
   resources: z.array(telemetryIn),
   daily_cost: z.array(z.number()).optional(),
   ebs_volumes: z.array(ebsVolumeIn).optional(),
   rds_instances: z.array(rdsInstanceIn).optional(),
+  s3_buckets: z.array(s3BucketIn).optional(),
 });
 export type AnalyzeRequest = z.infer<typeof analyzeRequest>;
