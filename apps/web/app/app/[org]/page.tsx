@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
-import Link from "next/link";
 import { db, schema } from "@/lib/db";
 import { TabBar, type TabId } from "@/components/overview/tab-bar";
 import { PulseTab } from "@/components/overview/pulse-tab";
@@ -10,8 +9,8 @@ import { FeedTab } from "@/components/overview/feed-tab";
 import { MapTab } from "@/components/overview/map-tab";
 import { ForecastTab } from "@/components/overview/forecast-tab";
 import { OverviewSkeleton } from "@/components/overview/overview-skeleton";
-import { Empty } from "@/components/ui/empty";
 import { RescanButton } from "@/components/overview/rescan-button";
+import { FirstScanTrigger } from "@/components/overview/first-scan-trigger";
 
 const VALID_TABS = ["pulse", "feed", "map", "forecast"] as const satisfies readonly TabId[];
 
@@ -62,22 +61,11 @@ async function OverviewContent({
 
   const latestRun = latestRunRows[0] ?? null;
 
-  // Empty-first: accounts exist but no scan has completed yet
+  // Empty-first: accounts exist but no scan has completed yet.
+  // FirstScanTrigger auto-fires POST /api/scan once on mount so the user never
+  // has to click "Rescan" manually after the connect wizard.
   if (!latestRun) {
-    return (
-      <Empty
-        title="First scan in progress"
-        body="Your AWS account is connected. Stratos is running the first engine scan — findings will appear here within the next 2 minutes."
-        action={
-          <Link
-            href={`/app/${orgSlug}/integrations`}
-            className="inline-flex items-center justify-center h-9 px-3.5 text-[13px] font-medium rounded bg-bg-elevated text-text-primary border border-border-subtle hover:border-border-strong transition-colors"
-          >
-            View integrations
-          </Link>
-        }
-      />
-    );
+    return <FirstScanTrigger accountId={accountId} orgSlug={orgSlug} />;
   }
 
   // Fetch findings for the latest run (used by feed + map)
