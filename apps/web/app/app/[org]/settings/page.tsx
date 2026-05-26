@@ -4,6 +4,7 @@ import { eq, desc } from "drizzle-orm";
 import Link from "next/link";
 import { db, schema } from "@/lib/db";
 import { Chip } from "@/components/ui/chip";
+import { PortalButton } from "@/components/billing/portal-button";
 
 export default async function SettingsPage({
   params,
@@ -32,6 +33,10 @@ export default async function SettingsPage({
     | "member";
   const roleChipKind: "savings" | "neutral" =
     role === "owner" ? "savings" : "neutral";
+
+  // Determine current tier from any account row in the org.
+  const currentTier = (accounts[0]?.tier ?? "free") as "free" | "pro";
+  const hasBillingAccount = accounts.some((a) => a.stripeCustomerId);
 
   function maskArn(arn: string | null): string {
     if (!arn) return "—";
@@ -148,27 +153,37 @@ export default async function SettingsPage({
         <h2 className="text-text-primary font-semibold text-sm uppercase tracking-widest">
           Billing
         </h2>
-        <div className="bg-bg-elevated border border-border-subtle rounded-xl px-5 py-4 space-y-3">
+        <div className="bg-bg-elevated border border-border-subtle rounded-xl px-5 py-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-text-primary font-medium text-sm">
-                Free plan
+                {currentTier === "pro" ? "Pro plan" : "Free plan"}
               </div>
               <div className="text-text-faint text-xs mt-0.5">
-                1 account · 1 scan/day · unlimited findings
+                {currentTier === "pro"
+                  ? "Unlimited scans · all integrations · priority support"
+                  : "1 account · 1 scan/day · unlimited findings"}
               </div>
             </div>
-            <a
-              href="#"
-              className="inline-flex items-center justify-center h-8 px-3 text-[12px] font-medium rounded border border-intel-700 text-intel-400 hover:bg-intel-950 transition-colors"
-            >
-              Upgrade
-            </a>
+            {currentTier === "pro" ? (
+              <Chip kind="savings">active</Chip>
+            ) : (
+              <Link
+                href="/pricing"
+                className="inline-flex items-center justify-center h-8 px-3 text-[12px] font-medium rounded border border-intel-700 text-intel-400 hover:bg-intel-950 transition-colors"
+              >
+                Upgrade
+              </Link>
+            )}
           </div>
-          <p className="text-xs text-text-faint">
-            Stripe billing activates at first revenue milestone. Pricing will be
-            usage-based.
-          </p>
+          {hasBillingAccount ? (
+            <PortalButton />
+          ) : (
+            <p className="text-xs text-text-faint">
+              Subscribe to manage billing, invoices, and payment methods from
+              the Stripe customer portal.
+            </p>
+          )}
         </div>
       </section>
     </div>

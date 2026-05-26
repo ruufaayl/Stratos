@@ -118,6 +118,25 @@ export async function POST(req: Request) {
         break;
       }
 
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = typeof invoice.customer === "string" ? invoice.customer : undefined;
+        console.warn(`[stripe] invoice.payment_failed customer=${customerId ?? "unknown"}`);
+        // Stripe retries automatically — we do NOT immediately downgrade.
+        // The subscription.deleted event fires after max retries are exhausted.
+        break;
+      }
+
+      case "customer.subscription.updated": {
+        const sub = event.data.object as Stripe.Subscription;
+        const clerkUserId = sub.metadata?.clerk_user_id;
+        if (!clerkUserId) break;
+        const active = sub.status === "active" || sub.status === "trialing";
+        await setUserTier(clerkUserId, active ? "pro" : "free");
+        console.log(`[stripe] subscription.updated → ${active ? "pro" : "free"} for ${clerkUserId}`);
+        break;
+      }
+
       default:
         // We ignore events we don't handle
         break;
