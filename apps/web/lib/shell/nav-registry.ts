@@ -1,7 +1,7 @@
 // apps/web/lib/shell/nav-registry.ts
 import {
   LayoutDashboard, AlertTriangle, TrendingUp, FileText,
-  Plug, Boxes, Settings,
+  History, Plug, Boxes, Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -44,6 +44,13 @@ export const primaryNav: readonly NavItem[] = [
     icon: FileText,
     href: (org) => `/app/${org}/reports`,
     matches: (p, org) => p.startsWith(`/app/${org}/reports`),
+  },
+  {
+    key: "scans",
+    label: "Scans",
+    icon: History,
+    href: (org) => `/app/${org}/scans`,
+    matches: (p, org) => p.startsWith(`/app/${org}/scans`),
   },
   {
     key: "integrations",
