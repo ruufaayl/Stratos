@@ -1,9 +1,7 @@
-import Link from "next/link";
-import { OpportunityCard } from "@/components/dashboard/opportunity-card";
 import { Empty } from "@/components/ui/empty";
+import { FeedTabInteractive, type FeedRow } from "./feed-tab-interactive";
 import { dbRowToEngineOpportunity } from "@/lib/db/adapters";
 import type { Opportunity as DbFinding } from "@/lib/db/schema";
-import type { Opportunity } from "@/lib/engine/types";
 
 interface FeedTabProps {
   findings: DbFinding[];
@@ -11,16 +9,16 @@ interface FeedTabProps {
 }
 
 /**
- * Findings feed tab.
- * Pairs each DB row with its parsed engine Opportunity so OpportunityCard
- * gets strongly-typed data AND we preserve the DB row id for deep-linking.
- * Rows whose engineData fails Zod parse are silently dropped.
+ * Findings feed tab (RSC).
+ * Parses each DB row's engineData into a strongly-typed Opportunity and
+ * hands the result to FeedTabInteractive, which owns the multi-select
+ * UI + bulk-action bar. Rows whose engineData fails Zod parse are
+ * silently dropped.
  */
 export function FeedTab({ findings, orgSlug }: FeedTabProps) {
-  type Pair = { row: DbFinding; opp: Opportunity };
-  const pairs = findings.reduce<Pair[]>((acc, row) => {
+  const rows = findings.reduce<FeedRow[]>((acc, row) => {
     const opp = dbRowToEngineOpportunity(row);
-    if (opp) acc.push({ row, opp });
+    if (opp) acc.push({ id: row.id, opp, explanation: row.explanation ?? undefined });
     return acc;
   }, []);
 
@@ -33,7 +31,7 @@ export function FeedTab({ findings, orgSlug }: FeedTabProps) {
     );
   }
 
-  if (pairs.length === 0) {
+  if (rows.length === 0) {
     return (
       <Empty
         title="No actionable findings"
@@ -42,21 +40,5 @@ export function FeedTab({ findings, orgSlug }: FeedTabProps) {
     );
   }
 
-  return (
-    <div className="space-y-3">
-      {pairs.map(({ row, opp }, i) => (
-        <Link
-          key={row.id}
-          href={`/app/${orgSlug}/findings/${row.id}`}
-          className="block hover:opacity-90 transition-opacity"
-        >
-          <OpportunityCard
-            opportunity={opp}
-            index={i}
-            explanation={row.explanation ?? undefined}
-          />
-        </Link>
-      ))}
-    </div>
-  );
+  return <FeedTabInteractive rows={rows} orgSlug={orgSlug} />;
 }
