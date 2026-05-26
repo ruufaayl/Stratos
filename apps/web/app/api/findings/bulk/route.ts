@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db";
+import { capture } from "@/lib/posthog/server";
 
 // Cap requests so a runaway client can't blow up the DB / serverless quota.
 const MAX_IDS = 200;
@@ -64,6 +65,8 @@ export async function PATCH(req: Request) {
     .update(schema.opportunities)
     .set(update)
     .where(inArray(schema.opportunities.id, ownedIds));
+
+  void capture({ distinctId: userId, event: "finding_bulk_action", properties: { orgId, action, count: ownedIds.length } });
 
   return NextResponse.json({ updated: ownedIds.length, skipped });
 }

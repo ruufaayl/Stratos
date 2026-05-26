@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { capture } from "@/lib/posthog/server";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +117,8 @@ export async function GET(req: Request) {
   });
 
   const csv = [header, ...dataLines].join("\r\n");
+
+  void capture({ distinctId: orgId, event: "findings_exported", properties: { orgId, rowCount: rows.length } });
 
   return new Response(csv, {
     status: 200,

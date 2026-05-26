@@ -4,6 +4,7 @@ import { eq, and, gte, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db";
 import { runScan } from "@/lib/scan/run-scan";
+import { capture } from "@/lib/posthog/server";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,8 @@ export async function POST(req: Request) {
     );
   }
 
+  void capture({ distinctId: userId, event: "scan_started", properties: { orgId, accountId, userId } });
+
   const result = await runScan({
     id: account.id,
     orgId: account.orgId,
@@ -96,11 +99,14 @@ export async function POST(req: Request) {
   });
 
   if (result.status === "failed") {
+    void capture({ distinctId: userId, event: "scan_failed", properties: { orgId, accountId } });
     return NextResponse.json(
       { error: result.error ?? "Scan failed", runId: result.runId },
       { status: 502 },
     );
   }
+
+  void capture({ distinctId: userId, event: "scan_completed", properties: { orgId, accountId, totalFindings: result.totalFindings, totalSavingsCents: result.totalSavingsCents, runId: result.runId } });
 
   return NextResponse.json({
     runId: result.runId,
