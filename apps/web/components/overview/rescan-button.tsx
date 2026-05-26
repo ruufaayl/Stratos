@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { UpgradeModal } from "@/components/billing/upgrade-modal";
 
 interface RescanButtonProps {
   accountId: string;
@@ -25,6 +26,11 @@ export function RescanButton({ accountId, lastScanAt }: RescanButtonProps) {
   const router = useRouter();
   const [status, setStatus] = useState<ScanStatus>("idle");
   const [rateLimitLabel, setRateLimitLabel] = useState<string>("");
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [scanUsage, setScanUsage] = useState<{
+    scansUsed?: number;
+    scansLimit?: number;
+  }>({});
 
   async function handleRescan() {
     setStatus("scanning");
@@ -37,6 +43,17 @@ export function RescanButton({ accountId, lastScanAt }: RescanButtonProps) {
       if (res.ok) {
         setStatus("done");
         router.refresh();
+      } else if (res.status === 402) {
+        const body = (await res.json()) as {
+          scansUsed?: number;
+          scansLimit?: number;
+        };
+        setScanUsage({
+          scansUsed: body.scansUsed,
+          scansLimit: body.scansLimit,
+        });
+        setUpgradeModalOpen(true);
+        setStatus("idle");
       } else if (res.status === 409) {
         // Scan already in progress — treat as success, it is already running
         setStatus("scanning");
@@ -70,15 +87,23 @@ export function RescanButton({ accountId, lastScanAt }: RescanButtonProps) {
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-text-faint font-mono">{statusLabel()}</span>
-      <button
-        onClick={handleRescan}
-        disabled={status === "scanning"}
-        className="inline-flex items-center justify-center gap-1.5 h-8 px-3 text-[12px] font-medium rounded border transition-colors border-border-subtle text-text-muted hover:border-border-strong hover:text-text-primary disabled:opacity-50"
-      >
-        {status === "scanning" ? "Scanning…" : "Re-scan"}
-      </button>
-    </div>
+    <>
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-text-faint font-mono">{statusLabel()}</span>
+        <button
+          onClick={handleRescan}
+          disabled={status === "scanning"}
+          className="inline-flex items-center justify-center gap-1.5 h-8 px-3 text-[12px] font-medium rounded border transition-colors border-border-subtle text-text-muted hover:border-border-strong hover:text-text-primary disabled:opacity-50"
+        >
+          {status === "scanning" ? "Scanning…" : "Re-scan"}
+        </button>
+      </div>
+      <UpgradeModal
+        open={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        scansUsed={scanUsage.scansUsed}
+        scansLimit={scanUsage.scansLimit}
+      />
+    </>
   );
 }
