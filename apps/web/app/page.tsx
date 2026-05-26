@@ -311,6 +311,8 @@ export default function Home() {
           <div className="flex items-center gap-6">
             <Link href="/proof" className="hover:text-text-muted transition-colors">live demo</Link>
             <Link href="/pricing" className="hover:text-text-muted transition-colors">pricing</Link>
+            <Link href="/privacy" className="hover:text-text-muted transition-colors">privacy</Link>
+            <Link href="/terms" className="hover:text-text-muted transition-colors">terms</Link>
             <span>build in public</span>
           </div>
         </div>
