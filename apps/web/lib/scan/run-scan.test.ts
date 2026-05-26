@@ -4,7 +4,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/aws/assume-role", () => ({ assumeRole: vi.fn() }));
 vi.mock("@/lib/aws/ec2-lister", () => ({ listEc2Instances: vi.fn() }));
 vi.mock("@/lib/aws/ebs-lister", () => ({ listEbsVolumes: vi.fn() }));
-vi.mock("@/lib/aws/cloudwatch-fetcher", () => ({ fetchInstanceTelemetry: vi.fn() }));
+vi.mock("@/lib/aws/rds-lister", () => ({ listRdsInstances: vi.fn() }));
+vi.mock("@/lib/aws/cloudwatch-fetcher", () => ({
+  fetchInstanceTelemetry: vi.fn(),
+  fetchRdsCpuMetrics: vi.fn(),
+}));
+vi.mock("@aws-sdk/client-cloudwatch", () => ({
+  CloudWatchClient: vi.fn(),
+}));
 // Mock engine client
 vi.mock("@/lib/engine/client", () => ({ analyze: vi.fn() }));
 // Mock drizzle-orm
@@ -38,7 +45,11 @@ vi.mock("@/lib/db", () => ({
 import { assumeRole } from "@/lib/aws/assume-role";
 import { listEc2Instances } from "@/lib/aws/ec2-lister";
 import { listEbsVolumes } from "@/lib/aws/ebs-lister";
-import { fetchInstanceTelemetry } from "@/lib/aws/cloudwatch-fetcher";
+import { listRdsInstances } from "@/lib/aws/rds-lister";
+import {
+  fetchInstanceTelemetry,
+  fetchRdsCpuMetrics,
+} from "@/lib/aws/cloudwatch-fetcher";
 import { analyze } from "@/lib/engine/client";
 import { db } from "@/lib/db";
 import { runScan } from "./run-scan";
@@ -113,7 +124,9 @@ beforeEach(() => {
   vi.mocked(assumeRole).mockResolvedValue(MOCK_CREDS);
   vi.mocked(listEc2Instances).mockResolvedValue(MOCK_INSTANCES);
   vi.mocked(listEbsVolumes).mockResolvedValue([]);
+  vi.mocked(listRdsInstances).mockResolvedValue([]);
   vi.mocked(fetchInstanceTelemetry).mockResolvedValue(MOCK_TELEMETRY);
+  vi.mocked(fetchRdsCpuMetrics).mockResolvedValue([]);
   vi.mocked(analyze).mockResolvedValue(MOCK_ENGINE_RESULT);
 });
 
@@ -235,5 +248,61 @@ describe("runScan", () => {
     const result = await runScan(MOCK_ACCOUNT);
     expect(result.status).toBe("succeeded");
     expect(analyze).not.toHaveBeenCalled();
+  });
+
+  it("forwards RDS instances + CPU telemetry to the engine payload (D10-B)", async () => {
+    vi.mocked(listRdsInstances).mockResolvedValue([
+      {
+        instanceId: "stratos-prod-db",
+        instanceClass: "db.r5.2xlarge",
+        engine: "postgres",
+        multiAz: false,
+        storageGb: 500,
+        availabilityZone: "us-east-1a",
+        region: "us-east-1",
+        createTime: "2025-01-01T00:00:00.000Z",
+      },
+    ]);
+    vi.mocked(fetchRdsCpuMetrics).mockResolvedValue(new Array(672).fill(1.5));
+
+    await runScan(MOCK_ACCOUNT);
+
+    expect(fetchRdsCpuMetrics).toHaveBeenCalledTimes(1);
+    expect(analyze).toHaveBeenCalledTimes(1);
+    const payload = vi.mocked(analyze).mock.calls[0]![0];
+    expect(payload.rds_instances).toHaveLength(1);
+    expect(payload.rds_instances![0]).toMatchObject({
+      instance_id: "stratos-prod-db",
+      instance_class: "db.r5.2xlarge",
+      engine: "postgres",
+      multi_az: false,
+      storage_gb: 500,
+      region: "us-east-1",
+      hourly_cost: 0, // engine owns RDS pricing
+    });
+    expect(payload.rds_instances![0]!.cpu_utilization_pct).toHaveLength(672);
+  });
+
+  it("drops RDS instances with insufficient CPU history", async () => {
+    vi.mocked(listRdsInstances).mockResolvedValue([
+      {
+        instanceId: "stratos-newdb",
+        instanceClass: "db.t3.medium",
+        engine: "mysql",
+        multiAz: false,
+        storageGb: 20,
+        availabilityZone: "us-east-1a",
+        region: "us-east-1",
+        createTime: "2026-05-25T00:00:00.000Z",
+      },
+    ]);
+    // Only 10 datapoints — below MIN_DATAPOINTS (48); should be filtered out.
+    vi.mocked(fetchRdsCpuMetrics).mockResolvedValue(new Array(10).fill(0));
+
+    await runScan(MOCK_ACCOUNT);
+
+    expect(analyze).toHaveBeenCalledTimes(1);
+    const payload = vi.mocked(analyze).mock.calls[0]![0];
+    expect(payload.rds_instances).toEqual([]);
   });
 });

@@ -83,3 +83,50 @@ export async function fetchInstanceTelemetry(
 
   return results;
 }
+
+/**
+ * Fetch RDS CPUUtilization metric for a single DB instance.
+ *
+ * Same period/stat pattern as EC2 (30-min Average over `daysBack` days).
+ * Returns CPU % in [0, 100], sorted oldest → newest.
+ *
+ * Used by D10-B's RDS idle-detection path. The engine consumes this as
+ * `cpu_utilization_pct` and projects it into `ResourceTelemetry` for
+ * `idle.detect()`.
+ */
+export async function fetchRdsCpuMetrics(
+  cwClient: CloudWatchClient,
+  instanceId: string,
+  daysBack: number = DAYS_LOOKBACK,
+): Promise<number[]> {
+  const endTime = new Date();
+  const startTime = new Date(
+    endTime.getTime() - daysBack * 24 * 60 * 60 * 1000,
+  );
+
+  try {
+    const res = await cwClient.send(
+      new GetMetricStatisticsCommand({
+        Namespace: "AWS/RDS",
+        MetricName: "CPUUtilization",
+        Dimensions: [{ Name: "DBInstanceIdentifier", Value: instanceId }],
+        StartTime: startTime,
+        EndTime: endTime,
+        Period: PERIOD_SECONDS,
+        Statistics: ["Average"],
+      }),
+    );
+
+    const sorted = (res.Datapoints ?? []).sort(
+      (a, b) => (a.Timestamp?.getTime() ?? 0) - (b.Timestamp?.getTime() ?? 0),
+    );
+
+    return sorted.map((dp) => dp.Average ?? 0);
+  } catch (err) {
+    console.error(
+      `[fetchRdsCpuMetrics] GetMetricStatistics failed for ${instanceId}:`,
+      err,
+    );
+    return [];
+  }
+}

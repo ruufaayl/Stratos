@@ -44,6 +44,47 @@ EBS_GB_MONTH_USD: dict[str, float] = {
 }
 EBS_DEFAULT_GB_MONTH_USD = 0.100  # gp2 rate — sensible fallback
 
+# RDS pricing snapshot (D10-B) — USD/hr by instance-class family prefix.
+# Conservative flat per-class values, us-east-1, single-AZ, MySQL/Postgres
+# reference. Multi-AZ doubles compute; large storage adds materially. The
+# engine owns this catalog so TS code does no dollar arithmetic.
+#
+# Source: aws.amazon.com/rds/pricing/, Jan 2026 reference. These are
+# deliberately rough — we want a defensible savings figure that survives a
+# customer comparing to their bill, not a per-cent-accurate forecast.
+RDS_HOURLY_USD: dict[str, float] = {
+    # Burstable
+    "db.t3.micro":   0.017,
+    "db.t3.small":   0.034,
+    "db.t3.medium":  0.068,
+    "db.t3.large":   0.136,
+    "db.t3.xlarge":  0.272,
+    "db.t3.2xlarge": 0.544,
+    "db.t4g.micro":  0.016,
+    "db.t4g.small":  0.032,
+    "db.t4g.medium": 0.065,
+    "db.t4g.large":  0.129,
+    # General purpose
+    "db.m5.large":    0.171,
+    "db.m5.xlarge":   0.342,
+    "db.m5.2xlarge":  0.684,
+    "db.m5.4xlarge":  1.368,
+    "db.m6g.large":   0.155,
+    "db.m6g.xlarge":  0.310,
+    "db.m6g.2xlarge": 0.620,
+    # Memory optimized (where the real waste lives)
+    "db.r5.large":    0.240,
+    "db.r5.xlarge":   0.480,
+    "db.r5.2xlarge":  0.960,
+    "db.r5.4xlarge":  1.920,
+    "db.r5.8xlarge":  3.840,
+    "db.r6g.large":   0.226,
+    "db.r6g.xlarge":  0.452,
+    "db.r6g.2xlarge": 0.904,
+    "db.r6g.4xlarge": 1.808,
+}
+RDS_DEFAULT_HOURLY_USD = 0.171  # db.m5.large rate — sensible fallback
+
 STARTED_AT = time.time()
 
 app = FastAPI(
@@ -99,6 +140,27 @@ class EbsVolumeIn(BaseModel):
     create_time: str | None = None
 
 
+class RdsInstanceIn(BaseModel):
+    """An RDS DB instance (D10-B) — idle-detection candidate.
+
+    Idle RDS is one of the biggest single waste lines on an AWS account.
+    We project each instance as standard ResourceTelemetry (CPU only for
+    now) and run idle.detect() over it. hourly_cost is sourced from
+    RDS_HOURLY_USD here — the TS side passes 0 and Python owns truth.
+    """
+
+    instance_id: str
+    instance_class: str           # e.g. "db.r5.2xlarge"
+    engine: str = "unknown"       # "mysql" | "postgres" | "aurora-*" | ...
+    multi_az: bool = False
+    storage_gb: float = 0.0
+    region: str = "us-east-1"
+    cpu_utilization_pct: list[float] = Field(
+        ..., description="CPU % series in [0, 100] (RDS CPUUtilization)"
+    )
+    hourly_cost: float = 0.0      # ignored; engine owns the catalog
+
+
 class AnalyzeRequest(BaseModel):
     resources: list[TelemetryIn]
     daily_cost: list[float] | None = Field(
@@ -107,6 +169,10 @@ class AnalyzeRequest(BaseModel):
     ebs_volumes: list[EbsVolumeIn] = Field(
         default_factory=list,
         description="Unattached EBS volumes to scan for zombie waste",
+    )
+    rds_instances: list[RdsInstanceIn] = Field(
+        default_factory=list,
+        description="RDS DB instances to scan for idle waste (D10-B)",
     )
 
 
@@ -177,6 +243,34 @@ def _ebs_hourly_cost(volume_type: str, size_gb: float) -> float:
     return monthly / HOURS_PER_MONTH
 
 
+def _rds_hourly_cost(instance_class: str, multi_az: bool = False) -> float:
+    """Look up RDS hourly cost from the catalog (with Multi-AZ multiplier)."""
+    base = RDS_HOURLY_USD.get(instance_class.lower(), RDS_DEFAULT_HOURLY_USD)
+    # Multi-AZ roughly doubles the compute charge — billed for the standby too.
+    return base * (2.0 if multi_az else 1.0)
+
+
+def _rds_to_telemetry(r: RdsInstanceIn) -> ResourceTelemetry:
+    """Project an RDS instance into ResourceTelemetry for idle.detect().
+
+    CPU is already in 0..100 (RDS CPUUtilization). hourly_cost is sourced
+    from the engine catalog — Python owns truth.
+    """
+    return ResourceTelemetry(
+        resource_id=r.instance_id,
+        service="RDS",
+        resource_type=r.instance_class,
+        region=r.region,
+        cpu=np.asarray(r.cpu_utilization_pct, dtype=float),
+        hourly_cost=_rds_hourly_cost(r.instance_class, r.multi_az),
+        tags={
+            "engine": r.engine,
+            "multi_az": str(r.multi_az),
+            "storage_gb": str(r.storage_gb),
+        },
+    )
+
+
 def _ebs_to_telemetry(v: EbsVolumeIn) -> ResourceTelemetry:
     """Project an unattached EBS volume as zero-utilization telemetry.
 
@@ -209,10 +303,10 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
 
     Output is sorted by monthly_savings descending — the dollar headline rules.
     """
-    if not req.resources and not req.ebs_volumes:
+    if not req.resources and not req.ebs_volumes and not req.rds_instances:
         raise HTTPException(
             status_code=400,
-            detail="resources or ebs_volumes must not be empty",
+            detail="resources, ebs_volumes, or rds_instances must not be empty",
         )
 
     fleet = [_to_telemetry(r) for r in req.resources]
@@ -236,6 +330,21 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
         ebs_count += 1
         opp = zombie_score(ebs_telem)
         if opp is not None:
+            opportunities.append(opp)
+
+    # RDS instances (D10-B). Idle detection only; an "idle" RDS is the
+    # marquee waste category (idle db.r5.4xlarge ≈ $1,800/mo). We do not
+    # run zombie or rightsize on RDS yet — those need engine-specific
+    # heuristics (Aurora vs MySQL vs Postgres differ enough that we'd
+    # rather ship narrow + accurate than broad + wrong).
+    rds_count = 0
+    for rds in req.rds_instances:
+        rds_telem = _rds_to_telemetry(rds)
+        if rds_telem.cpu.size == 0:
+            continue  # No CPU history; idle_score would raise.
+        rds_count += 1
+        opp = idle_score(rds_telem)
+        if opp["idle_score"] >= 0.7:
             opportunities.append(opp)
 
     idle_ids: set[str] = set()
@@ -265,7 +374,7 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
     )
 
     return {
-        "resource_count": len(fleet) + ebs_count,
+        "resource_count": len(fleet) + ebs_count + rds_count,
         "opportunity_count": len(opportunities),
         "total_monthly_waste": total_monthly_waste,
         "opportunities": opportunities,

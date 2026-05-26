@@ -113,9 +113,27 @@ export const ebsVolumeIn = z.object({
 
 export type EbsVolumeIn = z.infer<typeof ebsVolumeIn>;
 
+// RDS instance payload (D10-B). Idle RDS instances are often the biggest
+// waste line on an AWS account — db.r5.4xlarge fully idle is $1,800+/mo.
+// The engine projects each instance into ResourceTelemetry and runs the
+// standard idle heuristic. hourly_cost is passed 0; the engine owns truth.
+export const rdsInstanceIn = z.object({
+  instance_id: z.string(),
+  instance_class: z.string(),
+  engine: z.string().default("unknown"),
+  multi_az: z.boolean().default(false),
+  storage_gb: z.number().default(0),
+  region: z.string().default("us-east-1"),
+  cpu_utilization_pct: z.array(z.number()),
+  hourly_cost: z.number().default(0),
+});
+
+export type RdsInstanceIn = z.infer<typeof rdsInstanceIn>;
+
 export const analyzeRequest = z.object({
   resources: z.array(telemetryIn),
   daily_cost: z.array(z.number()).optional(),
   ebs_volumes: z.array(ebsVolumeIn).optional(),
+  rds_instances: z.array(rdsInstanceIn).optional(),
 });
 export type AnalyzeRequest = z.infer<typeof analyzeRequest>;
