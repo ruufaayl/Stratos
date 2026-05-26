@@ -119,3 +119,34 @@ export type NewAccount = typeof accounts.$inferInsert;
 export type Run = typeof runs.$inferSelect;
 export type Opportunity = typeof opportunities.$inferSelect;
 export type NewOpportunity = typeof opportunities.$inferInsert;
+
+// Audit log — immutable record of every significant user action.
+// Written by API routes; never modified after creation.
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // Clerk org ID of the actor
+    orgId: text("org_id").notNull(),
+    // Clerk user ID of the actor
+    userId: text("user_id").notNull(),
+    // Action performed — use snake_case verbs
+    // e.g. "scan_started", "finding_applied", "finding_dismissed",
+    //      "export_run", "bulk_action", "account_connected", "account_deleted"
+    action: text("action").notNull(),
+    // Optional: the primary resource this action affected
+    resourceId: text("resource_id"),
+    // Free-form metadata about the action (e.g. {findingKind: "idle", accountId: "..."})
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    orgIdIdx: index("audit_logs_org_id_idx").on(t.orgId),
+    userIdIdx: index("audit_logs_user_id_idx").on(t.userId),
+    actionIdx: index("audit_logs_action_idx").on(t.action),
+    createdAtIdx: index("audit_logs_created_at_idx").on(t.createdAt),
+  }),
+);
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
