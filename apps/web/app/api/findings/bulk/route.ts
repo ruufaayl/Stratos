@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db";
 import { capture } from "@/lib/posthog/server";
+import { checkOrgTier } from "@/lib/billing/gate";
 
 // Cap requests so a runaway client can't blow up the DB / serverless quota.
 const MAX_IDS = 200;
@@ -17,6 +18,14 @@ export async function PATCH(req: Request) {
   const { userId, orgId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!orgId) return NextResponse.json({ error: "No active organization" }, { status: 400 });
+
+  const tier = await checkOrgTier(orgId);
+  if (tier !== "pro") {
+    return NextResponse.json(
+      { error: "upgrade_required", message: "Bulk actions are a Pro feature. Upgrade to access them." },
+      { status: 402 },
+    );
+  }
 
   let body: unknown;
   try {

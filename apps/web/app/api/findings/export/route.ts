@@ -1,7 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, desc, eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { db, schema } from "@/lib/db";
 import { capture } from "@/lib/posthog/server";
+import { checkOrgTier } from "@/lib/billing/gate";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,14 @@ export async function GET(req: Request) {
   const { orgId } = await auth();
   if (!orgId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const tier = await checkOrgTier(orgId);
+  if (tier !== "pro") {
+    return NextResponse.json(
+      { error: "upgrade_required", message: "CSV export is a Pro feature. Upgrade to access it." },
+      { status: 402 },
+    );
   }
 
   const url = new URL(req.url);
